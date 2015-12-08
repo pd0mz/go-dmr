@@ -119,22 +119,28 @@ type Frame struct {
 	DMR        [33]byte
 }
 
+// CallType returns if the current frame is a group or unit call.
 func (f *Frame) CallType() CallType {
 	return CallType((f.Flags >> 1) & 0x01)
 }
 
+// DataType is the slot type when the FrameType is a data sync frame. For voice
+// frames it's the voice sequence number in DMR numbering, where 0=A, 1=B, etc.
 func (f *Frame) DataType() byte {
 	return f.Flags >> 4
 }
 
+// FrameType returns if the current frame is a voice, voice sync or data sync frame.
 func (f *Frame) FrameType() FrameType {
 	return FrameType((f.Flags >> 2) & 0x03)
 }
 
+// Slot is the time slot number.
 func (f *Frame) Slot() int {
 	return int(f.Flags&0x01) + 1
 }
 
+// ParseFrame parses a raw DMR data frame.
 func ParseFrame(data []byte) (*Frame, error) {
 	if len(data) != 53 {
 		return nil, errors.New("invalid packet length")
