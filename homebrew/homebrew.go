@@ -84,7 +84,7 @@ func (r *RepeaterConfiguration) String() string {
 	return b
 }
 
-type configFunc func() *RepeaterConfiguration
+type ConfigFunc func() *RepeaterConfiguration
 
 // CallType reflects the DMR data frame call type.
 type CallType byte
@@ -150,7 +150,7 @@ func ParseFrame(data []byte) (*Frame, error) {
 	return f, nil
 }
 
-type streamFunc func(*Frame)
+type StreamFunc func(*Frame)
 
 type authStatus byte
 
@@ -171,8 +171,8 @@ type Network struct {
 
 type Link struct {
 	Dump    bool
-	config  configFunc
-	stream  streamFunc
+	config  ConfigFunc
+	stream  StreamFunc
 	network *Network
 	conn    *net.UDPConn
 	authKey []byte
@@ -193,7 +193,7 @@ type Link struct {
 }
 
 // New starts a new DMR repeater using the Home Brew protocol.
-func New(network *Network, cf configFunc, sf streamFunc) (*Link, error) {
+func New(network *Network, cf ConfigFunc, sf StreamFunc) (*Link, error) {
 	if cf == nil {
 		return nil, errors.New("config func can't be nil")
 	}
