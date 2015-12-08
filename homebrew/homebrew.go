@@ -84,6 +84,9 @@ func (r *RepeaterConfiguration) String() string {
 	return b
 }
 
+// ConfigFunc returns an actual RepeaterConfiguration instance when called.
+// This is used by the DMR repeater to poll for current configuration,
+// statistics and metrics.
 type ConfigFunc func() *RepeaterConfiguration
 
 // CallType reflects the DMR data frame call type.
@@ -150,6 +153,7 @@ func ParseFrame(data []byte) (*Frame, error) {
 	return f, nil
 }
 
+// StreamFunc is called by the DMR repeater when a DMR data frame is received.
 type StreamFunc func(*Frame)
 
 type authStatus byte
