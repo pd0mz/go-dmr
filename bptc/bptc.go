@@ -4,11 +4,10 @@ package bptc
 import (
 	"errors"
 	"fmt"
+	"pd0mz/go-dmr/bit"
 )
 
-type Bit byte
-
-type vector [4]Bit
+type vector [4]bit.Bit
 
 // hamming(15, 11, 3) checking of a matrix row (15 total bits, 11 data bits,
 // min. distance: 3) See page 135 of the DMR Air Interface protocol
@@ -20,7 +19,7 @@ type vector [4]Bit
 // resulting row bits together with the corresponding parity check bit. The xor
 // result (error vector) should be 0, if it's not, it can be used to determine
 // the location of the erroneous bit using the generator matrix (P).
-func hamming_15_11_3_parity(data []Bit, errorVector *vector) {
+func hamming_15_11_3_parity(data bit.Bits, errorVector *vector) {
 	if data == nil || len(data) < 11 || errorVector == nil {
 		return
 	}
@@ -32,7 +31,7 @@ func hamming_15_11_3_parity(data []Bit, errorVector *vector) {
 	e[3] = (data[0] ^ data[1] ^ data[2] ^ data[4] ^ data[6] ^ data[7] ^ data[10])
 }
 
-func hamming_15_11_3_check(data []Bit, errorVector *vector) bool {
+func hamming_15_11_3_check(data bit.Bits, errorVector *vector) bool {
 	if data == nil || len(data) < 15 || errorVector == nil {
 		return false
 	}
@@ -48,7 +47,7 @@ func hamming_15_11_3_check(data []Bit, errorVector *vector) bool {
 	return e[0] == 0 && e[1] == 0 && e[2] == 0 && e[3] == 0
 }
 
-func hamming_13_9_3_parity(data []Bit, errorVector *vector) {
+func hamming_13_9_3_parity(data bit.Bits, errorVector *vector) {
 	if data == nil || len(data) < 9 || errorVector == nil {
 		return
 	}
@@ -62,7 +61,7 @@ func hamming_13_9_3_parity(data []Bit, errorVector *vector) {
 
 // hamming(13, 9, 3) checking of a matrix column (13 total bits, 9 data bits,
 // min. distance: 3)
-func hamming_13_9_3_check(data []Bit, errorVector *vector) bool {
+func hamming_13_9_3_check(data bit.Bits, errorVector *vector) bool {
 	if data == nil || len(data) < 13 || errorVector == nil {
 		return false
 	}
@@ -78,7 +77,7 @@ func hamming_13_9_3_check(data []Bit, errorVector *vector) bool {
 	return e[0] == 0 && e[1] == 0 && e[2] == 0 && e[3] == 0
 }
 
-var hamming_15_11_generator_matrix = []Bit{
+var hamming_15_11_generator_matrix = bit.Bits{
 	1, 0, 0, 1,
 	1, 1, 0, 1,
 	1, 1, 1, 1,
@@ -113,7 +112,7 @@ func hamming_15_11_3_error_position(errorVector *vector) int {
 	return -1
 }
 
-var hamming_13_9_generator_matrix = []Bit{
+var hamming_13_9_generator_matrix = bit.Bits{
 	1, 1, 1, 1,
 	1, 1, 1, 0,
 	0, 1, 1, 1,
@@ -146,7 +145,7 @@ func hamming_13_9_3_error_position(errorVector *vector) int {
 	return -1
 }
 
-func Dump(bits []Bit) {
+func Dump(bits bit.Bits) {
 	if len(bits) != 196 {
 		return
 	}
@@ -173,13 +172,13 @@ func Dump(bits []Bit) {
 	}
 }
 
-func CheckAndRepair(bits []Bit) (bool, error) {
+func CheckAndRepair(bits bit.Bits) (bool, error) {
 	if bits == nil || len(bits) != 196 {
 		return false, errors.New("expected 196 input bits")
 	}
 
 	var (
-		cb          = make([]Bit, 13)
+		cb          = make([]bit.Bit, 13)
 		errorVector = vector{}
 	)
 	for col := 0; col < 15; col++ {
@@ -227,8 +226,8 @@ func CheckAndRepair(bits []Bit) (bool, error) {
 }
 
 // Extract the data bits from the given deinterleaved info bits array (discards BPTC bits).
-func Extract(bits []Bit) []Bit {
-	var e = make([]Bit, 96)
+func Extract(bits bit.Bits) bit.Bits {
+	var e = make([]bit.Bit, 96)
 	copy(e[0:8], bits[4:12])
 	copy(e[8:19], bits[16:27])
 	copy(e[19:30], bits[31:42])
@@ -242,11 +241,11 @@ func Extract(bits []Bit) []Bit {
 }
 
 // New BPTC(196, 96) payload from 96 data bits.
-func New(bits []Bit) []Bit {
+func New(bits bit.Bits) bit.Bits {
 	var (
 		dbp         int
 		errorVector = vector{}
-		p           = make([]Bit, 196)
+		p           = make([]bit.Bit, 196)
 	)
 
 	for row := 0; row < 9; row++ {
@@ -272,7 +271,7 @@ func New(bits []Bit) []Bit {
 	}
 
 	for col := 0; col < 15; col++ {
-		var cb = make([]Bit, 9)
+		var cb = make([]bit.Bit, 9)
 		for row := 0; row < 9; row++ {
 			cb[row] = bits[col+row*15+1]
 		}
