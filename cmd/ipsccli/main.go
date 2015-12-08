@@ -4,7 +4,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
-	"pd0mz/dmr/ipsc"
+	"pd0mz/go-dmr/ipsc"
 
 	"gopkg.in/yaml.v2"
 )

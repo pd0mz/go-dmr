@@ -389,8 +389,11 @@ func (l *Link) parse(addr *net.UDPAddr, data []byte) {
 		}
 
 	case authDone:
+		if len(data) < 4 {
+			return
+		}
 		switch {
-		case bytes.Equal(data, DMRData):
+		case bytes.Equal(data[:4], DMRData):
 			if l.stream == nil {
 				return
 			}

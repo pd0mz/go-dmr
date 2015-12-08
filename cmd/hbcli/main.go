@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"pd0mz/dmr/homebrew"
+	"pd0mz/go-dmr/homebrew"
 
 	"gopkg.in/yaml.v2"
 )
