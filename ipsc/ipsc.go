@@ -30,7 +30,25 @@ type Network struct {
 	MasterPeer                 bool
 	AuthKey                    string
 	Master                     string
+	MasterID                   uint32
 	Listen                     string
+}
+
+type ipscPeerStatus struct {
+	connected            bool
+	peerList             bool
+	keepAliveSent        int
+	keepAliveMissed      int
+	keepAliveOutstanding int
+	keepAliveReceived    int
+	keepAliveRXTime      time.Time
+}
+
+type ipscPeer struct {
+	radioID uint32
+	mode    byte
+	flags   []byte
+	status  ipscPeerStatus
 }
 
 type IPSC struct {
@@ -45,20 +63,13 @@ type IPSC struct {
 		flags   []byte
 		tsFlags []byte
 	}
+	peers  map[uint32]ipscPeer
 	master struct {
 		addr    *net.UDPAddr
-		radioID []byte
+		radioID uint32
 		mode    byte
 		flags   []byte
-		status  struct {
-			connected            bool
-			peerList             bool
-			keepAliveSent        int
-			keepAliveMissed      int
-			keepAliveOutstanding int
-			keepAliveReceived    int
-			keepAliveRXTime      int
-		}
+		status  ipscPeerStatus
 	}
 	conn *net.UDPConn
 }
@@ -69,7 +80,7 @@ func New(network *Network) (*IPSC, error) {
 	}
 	c.local.radioID = make([]byte, 4)
 	c.local.flags = make([]byte, 4)
-	c.master.radioID = make([]byte, 4)
+	c.peers = make(map[uint32]ipscPeer)
 	c.master.flags = make([]byte, 4)
 
 	binary.BigEndian.PutUint32(c.local.radioID, c.Network.RadioID)
@@ -180,6 +191,8 @@ func (c *IPSC) Run() error {
 			log.Printf("authentication failed, dropping packet from %s\n", peer)
 			continue
 		}
+
+		go c.parse(peer, c.payload(b[:n]))
 	}
 
 	return nil
@@ -197,11 +210,56 @@ func (c *IPSC) authenticate(data []byte) bool {
 	return hmac.Equal(hash, mac.Sum(nil))
 }
 
+func (c *IPSC) parse(peer *net.UDPAddr, data []byte) {
+	packetType := data[0]
+	peerID := binary.BigEndian.Uint32(data[1:5])
+	//seq := data[5:6]
+
+	switch {
+	case MasterRequired[packetType]:
+		if !c.validMaster(peerID) {
+			log.Printf("%s: peer ID %d is not a valid master, expected %d\n",
+				peer, peerID, c.Network.MasterID)
+			return
+		}
+
+		switch packetType {
+		case MasterAliveReply:
+			c.resetKeepAlive(peerID)
+			c.master.status.keepAliveReceived++
+			c.master.status.keepAliveRXTime = time.Now()
+		}
+
+	case packetType == MasterRegistrationReply:
+		// We have successfully registered to a master
+		c.master.radioID = peerID
+		c.master.mode = data[5]
+		c.master.flags = data[6:10]
+		c.master.status.connected = true
+		c.master.status.keepAliveOutstanding = 0
+		log.Printf("registered to master %d\n", c.master.radioID)
+	}
+}
+
 func (c *IPSC) payload(data []byte) []byte {
 	if c.authKey == nil || len(c.authKey) == 0 {
 		return data
 	}
 	return data[:len(data)-10]
+}
+
+func (c *IPSC) resetKeepAlive(peerID uint32) {
+	if c.validMaster(peerID) {
+		c.master.status.keepAliveOutstanding = 0
+		return
+	}
+	if peer, ok := c.peers[peerID]; ok {
+		peer.status.keepAliveOutstanding = 0
+	}
+}
+
+func (c *IPSC) validMaster(peerID uint32) bool {
+	return c.master.radioID == peerID
 }
 
 func (c *IPSC) dump(addr *net.UDPAddr, data []byte) {
@@ -292,13 +350,26 @@ func (c *IPSC) peerMaintenance() {
 	for {
 		var p []byte
 		if c.master.status.connected {
-			log.Println("sending keep-alive to master")
+			log.Printf("sending keep-alive to master %d\n", c.master.radioID)
 			r := []byte{MasterAliveRequest}
 			r = append(r, c.local.radioID...)
 			r = append(r, c.local.tsFlags...)
 			r = append(r, []byte{LinkTypeIPSC, Version17, LinkTypeIPSC, Version16}...)
 			p = c.hashedPacket(c.authKey, r)
 
+			if c.master.status.keepAliveOutstanding > 0 {
+				c.master.status.keepAliveMissed++
+				log.Printf("%d outstanding keep-alives from master\n", c.master.status.keepAliveOutstanding)
+			}
+			if c.master.status.keepAliveOutstanding > c.Network.MaxMissed {
+				c.master.status.connected = false
+				c.master.status.keepAliveOutstanding = 0
+				log.Printf("connection to master %d lost\n", c.master.radioID)
+				continue
+			}
+
+			c.master.status.keepAliveSent++
+			c.master.status.keepAliveOutstanding++
 		} else {
 			log.Println("registering with master")
 			r := []byte{MasterRegistrationRequest}
