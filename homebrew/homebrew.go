@@ -22,6 +22,9 @@ var (
 	PackageID  = fmt.Sprintf("%s:go-dmr:%s-%s", runtime.GOOS, Version, runtime.GOARCH)
 )
 
+// RepeaterConfiguration holds information about the current repeater. It
+// should be returned by a callback in the implementation, returning actual
+// information about the current repeater status.
 type RepeaterConfiguration struct {
 	Callsign    string
 	RepeaterID  uint32
@@ -37,10 +40,12 @@ type RepeaterConfiguration struct {
 	URL         string
 }
 
+// Bytes returns the configuration as bytes.
 func (r *RepeaterConfiguration) Bytes() []byte {
 	return []byte(r.String())
 }
 
+// String returns the configuration as string.
 func (r *RepeaterConfiguration) String() string {
 	if r.ColorCode < 1 {
 		r.ColorCode = 1
@@ -81,6 +86,7 @@ func (r *RepeaterConfiguration) String() string {
 
 type configFunc func() *RepeaterConfiguration
 
+// CallType reflects the DMR data frame call type.
 type CallType byte
 
 const (
@@ -88,6 +94,7 @@ const (
 	UnitCall
 )
 
+// FrameType reflects the DMR data frame type.
 type FrameType byte
 
 const (
@@ -97,7 +104,8 @@ const (
 	UnusedFrameType
 )
 
-type Data struct {
+// Frame is a frame of DMR data.
+type Frame struct {
 	Signature  [4]byte
 	Sequence   byte
 	SrcID      uint32
@@ -108,41 +116,41 @@ type Data struct {
 	DMR        [33]byte
 }
 
-func (d *Data) CallType() CallType {
-	return CallType((d.Flags >> 1) & 0x01)
+func (f *Frame) CallType() CallType {
+	return CallType((f.Flags >> 1) & 0x01)
 }
 
-func (d *Data) DataType() byte {
-	return d.Flags >> 4
+func (f *Frame) DataType() byte {
+	return f.Flags >> 4
 }
 
-func (d *Data) FrameType() FrameType {
-	return FrameType((d.Flags >> 2) & 0x03)
+func (f *Frame) FrameType() FrameType {
+	return FrameType((f.Flags >> 2) & 0x03)
 }
 
-func (d *Data) Slot() int {
-	return int(d.Flags&0x01) + 1
+func (f *Frame) Slot() int {
+	return int(f.Flags&0x01) + 1
 }
 
-func ParseData(data []byte) (*Data, error) {
+func ParseFrame(data []byte) (*Frame, error) {
 	if len(data) != 53 {
 		return nil, errors.New("invalid packet length")
 	}
 
-	d := &Data{}
-	copy(d.Signature[:], data[:4])
-	d.Sequence = data[4]
-	d.SrcID = binary.BigEndian.Uint32(append([]byte{0x00}, data[5:7]...))
-	d.DstID = binary.BigEndian.Uint32(append([]byte{0x00}, data[8:10]...))
-	d.RepeaterID = binary.BigEndian.Uint32(data[11:15])
-	d.Flags = data[15]
-	d.StreamID = binary.BigEndian.Uint32(data[16:20])
-	copy(d.DMR[:], data[20:])
+	f := &Frame{}
+	copy(f.Signature[:], data[:4])
+	f.Sequence = data[4]
+	f.SrcID = binary.BigEndian.Uint32(append([]byte{0x00}, data[5:7]...))
+	f.DstID = binary.BigEndian.Uint32(append([]byte{0x00}, data[8:10]...))
+	f.RepeaterID = binary.BigEndian.Uint32(data[11:15])
+	f.Flags = data[15]
+	f.StreamID = binary.BigEndian.Uint32(data[16:20])
+	copy(f.DMR[:], data[20:])
 
-	return d, nil
+	return f, nil
 }
 
-type dataFunc func(*Data)
+type streamFunc func(*Frame)
 
 type authStatus byte
 
@@ -164,7 +172,7 @@ type Network struct {
 type Link struct {
 	Dump    bool
 	config  configFunc
-	stream  dataFunc
+	stream  streamFunc
 	network *Network
 	conn    *net.UDPConn
 	authKey []byte
@@ -184,7 +192,8 @@ type Link struct {
 	}
 }
 
-func New(network *Network, cf configFunc, df dataFunc) (*Link, error) {
+// New starts a new DMR repeater using the Home Brew protocol.
+func New(network *Network, cf configFunc, sf streamFunc) (*Link, error) {
 	if cf == nil {
 		return nil, errors.New("config func can't be nil")
 	}
@@ -192,7 +201,7 @@ func New(network *Network, cf configFunc, df dataFunc) (*Link, error) {
 	link := &Link{
 		network: network,
 		config:  cf,
-		stream:  df,
+		stream:  sf,
 	}
 
 	var err error
@@ -223,6 +232,7 @@ func New(network *Network, cf configFunc, df dataFunc) (*Link, error) {
 	return link, nil
 }
 
+// Run starts the datagram receiver and logs the repeater in with the master.
 func (l *Link) Run() error {
 	var err error
 
@@ -249,6 +259,7 @@ func (l *Link) Run() error {
 	return nil
 }
 
+// Send data to an UDP address using the repeater datagram socket.
 func (l *Link) Send(addr *net.UDPAddr, data []byte) error {
 	for len(data) > 0 {
 		n, err := l.conn.WriteToUDP(data, addr)
@@ -397,7 +408,7 @@ func (l *Link) parse(addr *net.UDPAddr, data []byte) {
 			if l.stream == nil {
 				return
 			}
-			frame, err := ParseData(data)
+			frame, err := ParseFrame(data)
 			if err != nil {
 				log.Printf("error parsing DMR data: %v\n", err)
 				return

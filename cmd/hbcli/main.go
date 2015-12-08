@@ -41,7 +41,7 @@ var (
 	}
 )
 
-func dump(d *homebrew.Data) {
+func dump(d *homebrew.Frame) {
 	fmt.Println("DMR data:")
 	fmt.Printf("\tsequence: %d\n", d.Sequence)
 	fmt.Printf("\ttarget..: %d -> %d\n", d.SrcID, d.DstID)
