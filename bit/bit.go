@@ -38,9 +38,26 @@ func (bits *Bits) Bytes() []byte {
 	return o
 }
 
-func (bits *Bits) String() string {
+func (bits Bits) Equal(other Bits) bool {
+	var l = bits.Len()
+	if l != other.Len() {
+		return false
+	}
+	for i := 0; i < l; i++ {
+		if bits[i] != other[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (bits Bits) Len() int {
+	return len(bits)
+}
+
+func (bits Bits) String() string {
 	var s = ""
-	for _, b := range *bits {
+	for _, b := range bits {
 		if b == 0x01 {
 			s += "1"
 		} else {
