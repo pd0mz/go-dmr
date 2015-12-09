@@ -152,22 +152,31 @@ func Dump(bits bit.Bits) {
 
 	var row, col int
 
-	fmt.Println("    BPTC(196, 96) matrix:")
+	fmt.Println("BPTC(196, 96) matrix:")
+	fmt.Print("         |")
+	for col = 0; col < 15; col++ {
+		fmt.Printf("%x", col)
+		if col == 10 {
+			fmt.Print(" ")
+		}
+	}
+	fmt.Println("\n       --+----------- ----")
 	for row = 0; row < 13; row++ {
+		fmt.Printf("       %.2d|", row)
 		for col = 0; col < 11; col++ {
 			// +1 because the first bit is R(3) and it's not used
 			// so we can ignore that.
-			fmt.Printf("      #%.2u ", bits[col+row*15+1])
+			fmt.Printf("%d", bits[col+row*15+1])
 		}
 		fmt.Print(" ")
 		for ; col < 15; col++ {
 			// +1 because the first bit is R(3) and it's not used
 			// so we can ignore that.
-			fmt.Printf("%u", bits[col+row*15+1])
+			fmt.Printf("%d", bits[col+row*15+1])
 		}
 		fmt.Println("")
 		if row == 8 {
-			fmt.Println("")
+			fmt.Println("         :")
 		}
 	}
 }
@@ -190,7 +199,7 @@ func CheckAndRepair(bits bit.Bits) (bool, error) {
 		if !hamming_13_9_3_check(cb, &errorVector) {
 			wrong := hamming_13_9_3_error_position(&errorVector)
 			if wrong < 0 {
-				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(13, 9) check error in column #%u, can't repair", col)
+				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(13, 9) check error in column #%d, can't repair", col)
 			}
 
 			// Fix bit error
@@ -201,7 +210,7 @@ func CheckAndRepair(bits bit.Bits) (bool, error) {
 			}
 
 			if !hamming_13_9_3_check(cb, &errorVector) {
-				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(13, 9) check error in column #%u, couldn't repair", col)
+				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(13, 9) check error in column #%d, couldn't repair", col)
 			}
 		}
 	}
@@ -211,13 +220,13 @@ func CheckAndRepair(bits bit.Bits) (bool, error) {
 		if !hamming_15_11_3_check(bits[row*15+1:], &errorVector) {
 			wrong := hamming_15_11_3_error_position(&errorVector)
 			if wrong < 0 {
-				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(15, 11) check error in row #%u, can't repair", row)
+				return false, fmt.Errorf("dmr/bptc(196, 96): hamming(15, 11) check error in row #%d, can't repair", row)
 			}
 
 			// Fix bit error
 			bits[row*15+wrong+1] ^= 1
 			if !hamming_15_11_3_check(bits[row*15+1:], &errorVector) {
-				return false, fmt.Errorf("dmr/bptc (196,96): hamming(15,11) check error, couldn't repair row #%u", row)
+				return false, fmt.Errorf("dmr/bptc (196,96): hamming(15,11) check error, couldn't repair row #%d", row)
 			}
 		}
 	}
@@ -263,23 +272,23 @@ func New(bits bit.Bits) bit.Bits {
 			}
 		}
 		// +1 because the first bit is R(3) and it's not used so we can ignore that.
-		hamming_15_11_3_parity(bits[row*15+1:], &errorVector)
-		bits[row*15+11+1] = errorVector[0]
-		bits[row*15+12+1] = errorVector[1]
-		bits[row*15+13+1] = errorVector[2]
-		bits[row*15+14+1] = errorVector[3]
+		hamming_15_11_3_parity(p[row*15+1:], &errorVector)
+		p[row*15+11+1] = errorVector[0]
+		p[row*15+12+1] = errorVector[1]
+		p[row*15+13+1] = errorVector[2]
+		p[row*15+14+1] = errorVector[3]
 	}
 
 	for col := 0; col < 15; col++ {
 		var cb = make([]bit.Bit, 9)
 		for row := 0; row < 9; row++ {
-			cb[row] = bits[col+row*15+1]
+			cb[row] = p[col+row*15+1]
 		}
 		hamming_13_9_3_parity(cb, &errorVector)
-		bits[col+135+1] = errorVector[0]
-		bits[col+135+15+1] = errorVector[1]
-		bits[col+135+30+1] = errorVector[2]
-		bits[col+135+45+1] = errorVector[3]
+		p[col+135+1] = errorVector[0]
+		p[col+135+15+1] = errorVector[1]
+		p[col+135+30+1] = errorVector[2]
+		p[col+135+45+1] = errorVector[3]
 	}
 
 	return p
