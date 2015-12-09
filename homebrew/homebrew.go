@@ -119,6 +119,25 @@ type Frame struct {
 	DMR        [33]byte
 }
 
+// Bytes packs the frame into bytes ready to send over the network.
+func (f *Frame) Bytes() []byte {
+	var b = make([]byte, 53)
+	copy(b[:4], f.Signature[:])
+	b[4] = f.Sequence
+	b[5] = byte(f.SrcID >> 16)
+	b[6] = byte(f.SrcID >> 8)
+	b[7] = byte(f.SrcID)
+	b[8] = byte(f.DstID >> 16)
+	b[9] = byte(f.DstID >> 8)
+	b[10] = byte(f.DstID)
+	binary.BigEndian.PutUint32(b[11:15], f.RepeaterID)
+	b[15] = f.Flags
+	binary.BigEndian.PutUint32(b[16:20], f.StreamID)
+	copy(b[21:], f.DMR[:])
+
+	return b
+}
+
 // CallType returns if the current frame is a group or unit call.
 func (f *Frame) CallType() CallType {
 	return CallType((f.Flags >> 1) & 0x01)
@@ -149,8 +168,8 @@ func ParseFrame(data []byte) (*Frame, error) {
 	f := &Frame{}
 	copy(f.Signature[:], data[:4])
 	f.Sequence = data[4]
-	f.SrcID = binary.BigEndian.Uint32(append([]byte{0x00}, data[5:7]...))
-	f.DstID = binary.BigEndian.Uint32(append([]byte{0x00}, data[8:10]...))
+	f.SrcID = (uint32(data[5]) << 16) | (uint32(data[6]) << 8) | uint32(data[7])
+	f.DstID = (uint32(data[8]) << 16) | (uint32(data[9]) << 8) | uint32(data[10])
 	f.RepeaterID = binary.BigEndian.Uint32(data[11:15])
 	f.Flags = data[15]
 	f.StreamID = binary.BigEndian.Uint32(data[16:20])
@@ -177,6 +196,11 @@ type Network struct {
 	LocalID  uint32
 	Master   string
 	MasterID uint32
+}
+
+type packet struct {
+	addr *net.UDPAddr
+	data []byte
 }
 
 type Link struct {
@@ -250,7 +274,9 @@ func (l *Link) Run() error {
 		return err
 	}
 
+	queue := make(chan packet)
 	go l.login()
+	go l.parse(queue)
 
 	for {
 		var (
@@ -263,7 +289,7 @@ func (l *Link) Run() error {
 			continue
 		}
 
-		go l.parse(peer, data[:n])
+		queue <- packet{peer, data[:n]}
 	}
 
 	return nil
@@ -304,7 +330,9 @@ func (l *Link) login() {
 
 			case authDone:
 				config := l.config().Bytes()
-				fmt.Printf(hex.Dump(config))
+				if l.Dump {
+					fmt.Printf(hex.Dump(config))
+				}
 				log.Printf("dmr/homebrew: logged in, sending %d bytes of repeater configuration\n", len(config))
 
 				if err := l.Send(l.master.addr, config); err != nil {
@@ -342,88 +370,93 @@ func (l *Link) keepAlive() {
 	}
 }
 
-func (l *Link) parse(addr *net.UDPAddr, data []byte) {
-	size := len(data)
-
-	switch l.master.status {
-	case authNone:
-		if bytes.Equal(data, DMRData) {
-			return
-		}
-		if size < 14 {
-			return
-		}
-		packet := data[:6]
-		repeater, err := hex.DecodeString(string(data[6:14]))
-		if err != nil {
-			log.Println("dmr/homebrew: unexpected login reply from master")
-			l.master.status = authFail
-			break
-		}
-
-		switch {
-		case bytes.Equal(packet, MasterNAK):
-			log.Printf("dmr/homebrew: login refused by master %d\n", repeater)
-			l.master.status = authFail
-			break
-		case bytes.Equal(packet, MasterACK):
-			log.Printf("dmr/homebrew: login accepted by master %d\n", repeater)
-			l.master.secret = data[14:]
-			l.master.status = authBegin
-			break
-		default:
-			log.Printf("dmr/homebrew: unexpected login reply from master %d\n", repeater)
-			l.master.status = authFail
-			break
-		}
-
-	case authBegin:
-		if bytes.Equal(data, DMRData) {
-			return
-		}
-		if size < 14 {
-			log.Println("dmr/homebrew: unexpected login reply from master")
-			l.master.status = authFail
-			break
-		}
-		packet := data[:6]
-		repeater, err := hex.DecodeString(string(data[6:14]))
-		if err != nil {
-			log.Println("dmr/homebrew: unexpected login reply from master")
-			l.master.status = authFail
-			break
-		}
-
-		switch {
-		case bytes.Equal(packet, MasterNAK):
-			log.Printf("dmr/homebrew: authentication refused by master %d\n", repeater)
-			l.master.status = authFail
-			break
-		case bytes.Equal(packet, MasterACK):
-			log.Printf("dmr/homebrew: authentication accepted by master %d\n", repeater)
-			l.master.status = authDone
-			break
-		default:
-			log.Printf("dmr/homebrew: unexpected authentication reply from master %d\n", repeater)
-			l.master.status = authFail
-			break
-		}
-
-	case authDone:
-		if len(data) < 4 {
-			return
-		}
-		switch {
-		case bytes.Equal(data[:4], DMRData):
-			if l.stream == nil {
-				return
+func (l *Link) parse(queue <-chan packet) {
+	for {
+		select {
+		case p := <-queue:
+			size := len(p.data)
+			if size < 4 {
+				continue
 			}
-			frame, err := ParseFrame(data)
-			if err != nil {
-				log.Printf("error parsing DMR data: %v\n", err)
-				return
+
+			switch l.master.status {
+			case authNone:
+				if bytes.Equal(p.data[:4], DMRData) {
+					return
+				}
+				if size < 14 {
+					return
+				}
+				packet := p.data[:6]
+				repeater, err := hex.DecodeString(string(p.data[6:14]))
+				if err != nil {
+					log.Println("dmr/homebrew: unexpected login reply from master")
+					l.master.status = authFail
+					break
+				}
+
+				switch {
+				case bytes.Equal(packet, MasterNAK):
+					log.Printf("dmr/homebrew: login refused by master %d\n", repeater)
+					l.master.status = authFail
+					break
+				case bytes.Equal(packet, MasterACK):
+					log.Printf("dmr/homebrew: login accepted by master %d\n", repeater)
+					l.master.secret = p.data[14:]
+					l.master.status = authBegin
+					break
+				default:
+					log.Printf("dmr/homebrew: unexpected login reply from master %d\n", repeater)
+					l.master.status = authFail
+					break
+				}
+
+			case authBegin:
+				if bytes.Equal(p.data[:4], DMRData) {
+					return
+				}
+				if size < 14 {
+					log.Println("dmr/homebrew: unexpected login reply from master")
+					l.master.status = authFail
+					break
+				}
+				packet := p.data[:6]
+				repeater, err := hex.DecodeString(string(p.data[6:14]))
+				if err != nil {
+					log.Println("dmr/homebrew: unexpected login reply from master")
+					l.master.status = authFail
+					break
+				}
+
+				switch {
+				case bytes.Equal(packet, MasterNAK):
+					log.Printf("dmr/homebrew: authentication refused by master %d\n", repeater)
+					l.master.status = authFail
+					break
+				case bytes.Equal(packet, MasterACK):
+					log.Printf("dmr/homebrew: authentication accepted by master %d\n", repeater)
+					l.master.status = authDone
+					break
+				default:
+					log.Printf("dmr/homebrew: unexpected authentication reply from master %d\n", repeater)
+					l.master.status = authFail
+					break
+				}
+
+			case authDone:
+				switch {
+				case bytes.Equal(p.data[:4], DMRData):
+					if l.stream == nil {
+						return
+					}
+					frame, err := ParseFrame(p.data)
+					if err != nil {
+						log.Printf("error parsing DMR data: %v\n", err)
+						return
+					}
+					l.stream(frame)
+				}
 			}
-			l.stream(frame)
 		}
 	}
 }

@@ -4,7 +4,8 @@ package bptc
 import (
 	"errors"
 	"fmt"
-	"pd0mz/go-dmr/bit"
+
+	"github.com/pd0mz/go-dmr/bit"
 )
 
 type vector [4]bit.Bit
