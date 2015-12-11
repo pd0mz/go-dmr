@@ -4,7 +4,6 @@ package homebrew
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/pd0mz/go-dmr/ipsc"
 )
 
 var (
@@ -97,89 +98,8 @@ const (
 	UnitCall
 )
 
-// FrameType reflects the DMR data frame type.
-type FrameType byte
-
-const (
-	Voice FrameType = iota
-	VoiceSync
-	DataSync
-	UnusedFrameType
-)
-
-// Frame is a frame of DMR data.
-type Frame struct {
-	Signature  [4]byte
-	Sequence   byte
-	SrcID      uint32
-	DstID      uint32
-	RepeaterID uint32
-	Flags      byte
-	StreamID   uint32
-	DMR        [33]byte
-}
-
-// Bytes packs the frame into bytes ready to send over the network.
-func (f *Frame) Bytes() []byte {
-	var b = make([]byte, 53)
-	copy(b[:4], f.Signature[:])
-	b[4] = f.Sequence
-	b[5] = byte(f.SrcID >> 16)
-	b[6] = byte(f.SrcID >> 8)
-	b[7] = byte(f.SrcID)
-	b[8] = byte(f.DstID >> 16)
-	b[9] = byte(f.DstID >> 8)
-	b[10] = byte(f.DstID)
-	binary.BigEndian.PutUint32(b[11:15], f.RepeaterID)
-	b[15] = f.Flags
-	binary.BigEndian.PutUint32(b[16:20], f.StreamID)
-	copy(b[21:], f.DMR[:])
-
-	return b
-}
-
-// CallType returns if the current frame is a group or unit call.
-func (f *Frame) CallType() CallType {
-	return CallType((f.Flags >> 1) & 0x01)
-}
-
-// DataType is the slot type when the FrameType is a data sync frame. For voice
-// frames it's the voice sequence number in DMR numbering, where 0=A, 1=B, etc.
-func (f *Frame) DataType() byte {
-	return f.Flags >> 4
-}
-
-// FrameType returns if the current frame is a voice, voice sync or data sync frame.
-func (f *Frame) FrameType() FrameType {
-	return FrameType((f.Flags >> 2) & 0x03)
-}
-
-// Slot is the time slot number.
-func (f *Frame) Slot() int {
-	return int(f.Flags&0x01) + 1
-}
-
-// ParseFrame parses a raw DMR data frame.
-func ParseFrame(data []byte) (*Frame, error) {
-	if len(data) != 53 {
-		return nil, errors.New("invalid packet length")
-	}
-
-	f := &Frame{}
-	copy(f.Signature[:], data[:4])
-	f.Sequence = data[4]
-	f.SrcID = (uint32(data[5]) << 16) | (uint32(data[6]) << 8) | uint32(data[7])
-	f.DstID = (uint32(data[8]) << 16) | (uint32(data[9]) << 8) | uint32(data[10])
-	f.RepeaterID = binary.BigEndian.Uint32(data[11:15])
-	f.Flags = data[15]
-	f.StreamID = binary.BigEndian.Uint32(data[16:20])
-	copy(f.DMR[:], data[20:])
-
-	return f, nil
-}
-
 // StreamFunc is called by the DMR repeater when a DMR data frame is received.
-type StreamFunc func(*Frame)
+type StreamFunc func(*ipsc.Packet)
 
 type authStatus byte
 
@@ -444,19 +364,32 @@ func (l *Link) parse(queue <-chan packet) {
 				}
 
 			case authDone:
+				if l.Dump {
+					fmt.Printf("received from %s:\n", p.addr)
+					fmt.Print(hex.Dump(p.data))
+				}
 				switch {
 				case bytes.Equal(p.data[:4], DMRData):
-					if l.stream == nil {
-						return
-					}
-					frame, err := ParseFrame(p.data)
-					if err != nil {
-						log.Printf("error parsing DMR data: %v\n", err)
-						return
-					}
-					l.stream(frame)
+					l.parseDMR(p.data)
 				}
 			}
 		}
 	}
+}
+
+func (l *Link) parseDMR(d []byte) {
+	// If we have no stream callback, don't even bother to decode the DMR data frame.
+	if l.stream == nil {
+		return
+	}
+
+	var (
+		p   *ipsc.Packet
+		err error
+	)
+	if p, err = ParseData(d); err != nil {
+		log.Printf("dmr/homebrew: error parsing DMRD frame: %v\n", err)
+		return
+	}
+	l.stream(p)
 }
