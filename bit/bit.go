@@ -1,5 +1,7 @@
 package bit
 
+import "fmt"
+
 type Bit byte
 
 func (b *Bit) Flip() {
@@ -36,6 +38,33 @@ func (bits *Bits) Bytes() []byte {
 		}
 	}
 	return o
+}
+
+func (bits Bits) Debits() Debits {
+	var debits = make(Debits, (len(bits)+1)/2)
+	for i := 0; i < len(bits); i += 2 {
+		debits[i/2] = Debit((bits[i] << 1) | (bits[i+1]))
+	}
+	return debits
+}
+
+func (bits Bits) Dump() string {
+	var (
+		s     string
+		bytes = bits.Bytes()
+	)
+
+	for i, b := range bytes {
+		if i%7 == 0 {
+			if i != 0 {
+				s += "\n"
+			}
+			s += fmt.Sprintf("%08x  ", i)
+		}
+		s += fmt.Sprintf("%08b ", b)
+	}
+	s += "\n"
+	return s
 }
 
 func (bits Bits) Equal(other Bits) bool {
