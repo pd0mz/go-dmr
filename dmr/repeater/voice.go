@@ -76,13 +76,19 @@ func (r *Repeater) HandleVoiceFrame(p *ipsc.Packet) error {
 	)
 	if emb, err = dmr.ParseEMB(dmr.ExtractEMBBitsFromSyncBits(sync)); err != nil {
 		fmt.Println("unknown sync pattern, no EMB")
-		return err
 	}
 
-	fmt.Printf("EMB LCSS %d\n", emb.LCSS)
+	if emb != nil {
+		fmt.Printf("EMB LCSS %d\n", emb.LCSS)
 
-	// TODO(maze): implement VBPTC matrix handling
-	switch emb.LCSS {
+		// TODO(maze): implement VBPTC matrix handling
+		switch emb.LCSS {
+		}
+	}
+
+	// Extract the three embedded AMBE frames if we have a callback function to process them.
+	if r.VoiceFrameFunc != nil {
+		r.VoiceFrameFunc(p, dmr.ExtractVoiceBits(p.PayloadBits))
 	}
 
 	return nil

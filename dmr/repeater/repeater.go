@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/tehmaze/go-dmr/bit"
 	"github.com/tehmaze/go-dmr/ipsc"
 )
 
@@ -39,7 +40,9 @@ type Slot struct {
 }
 
 type Repeater struct {
-	Slot []*Slot
+	Slot           []*Slot
+	DataFrameFunc  func(*ipsc.Packet, bit.Bits)
+	VoiceFrameFunc func(*ipsc.Packet, bit.Bits)
 }
 
 func New() *Repeater {
