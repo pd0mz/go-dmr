@@ -1,7 +1,7 @@
 // Package quadres_16_7 implements the quadratic residue (16, 7, 6) parity check.
 package quadres_16_7
 
-import "github.com/pd0mz/go-dmr/bit"
+import "github.com/tehmaze/go-dmr/bit"
 
 var (
 	validDataParities = [128]bit.Bits{}

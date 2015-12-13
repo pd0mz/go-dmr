@@ -3,7 +3,7 @@ package bptc
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/bit"
 )
 
 func Decode(bits bit.Bits, deinterleave bool) (bit.Bits, error) {

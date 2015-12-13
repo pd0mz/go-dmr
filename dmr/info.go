@@ -1,6 +1,6 @@
 package dmr
 
-import "github.com/pd0mz/go-dmr/bit"
+import "github.com/tehmaze/go-dmr/bit"
 
 func ExtractInfoBits(payload bit.Bits) bit.Bits {
 	var b = make(bit.Bits, InfoBits)

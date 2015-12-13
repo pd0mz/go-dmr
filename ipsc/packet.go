@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
-	"github.com/pd0mz/go-dmr/dmr"
+	"github.com/tehmaze/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/dmr"
 )
 
 const (

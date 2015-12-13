@@ -1,6 +1,6 @@
 package dmr
 
-import "github.com/pd0mz/go-dmr/bit"
+import "github.com/tehmaze/go-dmr/bit"
 
 var SlotTypeName = [16]string{
 	"PI Header",        // 0000

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/pd0mz/go-dmr/ipsc"
+	"github.com/tehmaze/go-dmr/ipsc"
 )
 
 const (
@@ -115,7 +115,7 @@ func (r *Repeater) Stream(p *ipsc.Packet) {
 
 	var err error
 
-	fmt.Printf("dmr[%d] [%d->%d]: %s: ", p.Sequence, p.SrcID, p.DstID, ipsc.SlotTypeName[p.SlotType])
+	fmt.Printf("ts%d/dmr[%03d] [%d->%d]: %s: ", p.Timeslot+1, p.Sequence, p.SrcID, p.DstID, ipsc.SlotTypeName[p.SlotType])
 	switch p.SlotType {
 	case ipsc.VoiceLCHeader:
 		err = r.HandleVoiceLCHeader(p)

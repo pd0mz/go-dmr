@@ -1,9 +1,9 @@
 package repeater
 
 import (
-	"github.com/pd0mz/go-dmr/bptc"
-	"github.com/pd0mz/go-dmr/dmr"
-	"github.com/pd0mz/go-dmr/ipsc"
+	"github.com/tehmaze/go-dmr/bptc"
+	"github.com/tehmaze/go-dmr/dmr"
+	"github.com/tehmaze/go-dmr/ipsc"
 )
 
 func (r *Repeater) HandleDataHeader(p *ipsc.Packet) error {

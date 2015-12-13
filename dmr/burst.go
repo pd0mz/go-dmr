@@ -4,7 +4,7 @@ package dmr
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/bit"
 )
 
 // Burst contains data from a single burst, see 4.2.2 Burst and frame structure

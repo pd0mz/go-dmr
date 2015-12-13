@@ -3,8 +3,8 @@ package homebrew
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
-	"github.com/pd0mz/go-dmr/ipsc"
+	"github.com/tehmaze/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/ipsc"
 )
 
 // ParseData reads a raw DMR data frame from the homebrew protocol and parses it as it were an IPSC packet.

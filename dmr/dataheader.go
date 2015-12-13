@@ -3,7 +3,7 @@ package dmr
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/bit"
 )
 
 // Data Header Packet Format

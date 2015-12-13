@@ -3,7 +3,7 @@ package dmr
 import (
 	"bytes"
 
-	"github.com/pd0mz/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/bit"
 )
 
 // Table 9.2: SYNC Patterns

@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pd0mz/go-dmr/ipsc"
+	"github.com/tehmaze/go-dmr/ipsc"
 )
 
 var (

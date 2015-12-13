@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/pd0mz/go-dmr/bptc"
-	"github.com/pd0mz/go-dmr/dmr"
-	"github.com/pd0mz/go-dmr/ipsc"
+	"github.com/tehmaze/go-dmr/bptc"
+	"github.com/tehmaze/go-dmr/dmr"
+	"github.com/tehmaze/go-dmr/ipsc"
 )
 
 var voiceFrameMap = map[uint16]uint8{

@@ -3,8 +3,8 @@ package bptc
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
-	"github.com/pd0mz/go-dmr/fec"
+	"github.com/tehmaze/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/fec"
 )
 
 func Process(info bit.Bits, payload []byte) error {

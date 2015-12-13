@@ -3,7 +3,7 @@ package fec
 import (
 	"fmt"
 
-	"github.com/pd0mz/go-dmr/bit"
+	"github.com/tehmaze/go-dmr/bit"
 )
 
 func Golay_20_8_Parity(bits bit.Bits) bit.Bits {
