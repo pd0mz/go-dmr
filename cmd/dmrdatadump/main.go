@@ -67,7 +67,6 @@ func main() {
 				log.Printf("error decoding AMBE3000 frame: %v\n", err)
 				return
 			}
-			fmt.Printf("%v\n", samples)
 			for _, sample := range samples {
 				ambeframe <- sample
 			}
