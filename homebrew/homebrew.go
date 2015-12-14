@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	Version    = "20151208"
+	Version    = "20151214"
 	SoftwareID = fmt.Sprintf("%s:go-dmr:%s", runtime.GOOS, Version)
 	PackageID  = fmt.Sprintf("%s:go-dmr:%s-%s", runtime.GOOS, Version, runtime.GOARCH)
 )
@@ -28,7 +28,7 @@ var (
 // information about the current repeater status.
 type RepeaterConfiguration struct {
 	Callsign    string
-	RepeaterID  uint32
+	ID          uint32 // Our RepeaterID
 	RXFreq      uint32
 	TXFreq      uint32
 	TXPower     uint8
@@ -69,7 +69,7 @@ func (r *RepeaterConfiguration) String() string {
 
 	var b = "RPTC"
 	b += fmt.Sprintf("%-8s", r.Callsign)
-	b += fmt.Sprintf("%08x", r.RepeaterID)
+	b += fmt.Sprintf("%08x", r.ID)
 	b += fmt.Sprintf("%09d", r.RXFreq)
 	b += fmt.Sprintf("%09d", r.TXFreq)
 	b += fmt.Sprintf("%02d", r.TXPower)
