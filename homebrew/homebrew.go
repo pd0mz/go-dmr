@@ -186,6 +186,18 @@ func New(network *Network, cf ConfigFunc, sf StreamFunc) (*Link, error) {
 	return link, nil
 }
 
+// Close stops the socket and stops the runner
+func (l *Link) Close() error {
+	if l.conn == nil {
+		return errors.New("dmr/homebrew: link not open")
+	}
+	if l.master.addr != nil {
+		l.Send(l.master.addr, append(RepeaterClosing, l.local.id...))
+	}
+
+	return l.conn.Close()
+}
+
 // Run starts the datagram receiver and logs the repeater in with the master.
 func (l *Link) Run() error {
 	var err error
@@ -198,6 +210,7 @@ func (l *Link) Run() error {
 	go l.login()
 	go l.parse(queue)
 
+receiving:
 	for {
 		var (
 			n    int
@@ -205,6 +218,9 @@ func (l *Link) Run() error {
 			data = make([]byte, 512)
 		)
 		if n, peer, err = l.conn.ReadFromUDP(data); err != nil {
+			if peer == nil {
+				break receiving
+			}
 			log.Printf("dmr/homebrew: error reading from %s: %v\n", peer, err)
 			continue
 		}
@@ -212,7 +228,11 @@ func (l *Link) Run() error {
 		queue <- packet{peer, data[:n]}
 	}
 
-	return nil
+	// Because we close it in .Close()
+	if strings.HasSuffix(err.Error(), ": use of closed network connection") {
+		return nil
+	}
+	return err
 }
 
 // Send data to an UDP address using the repeater datagram socket.
