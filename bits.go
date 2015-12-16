@@ -1,4 +1,21 @@
-package bit
+package dmr
+
+const (
+	PayloadBits                 = 98 + 10 + 48 + 10 + 98
+	PayloadSize                 = 33
+	InfoHalfBits                = 98
+	InfoBits                    = 2 * InfoHalfBits
+	SlotTypeHalfBits            = 10
+	SlotTypeBits                = 2 * SlotTypeHalfBits
+	SignalBits                  = 48
+	SyncOffsetBits              = InfoHalfBits + SlotTypeHalfBits
+	SyncBits                    = SignalBits
+	VoiceHalfBits               = 108
+	VoiceBits                   = 2 * VoiceHalfBits
+	EMBHalfBits                 = 8
+	EMBBits                     = 2 * EMBHalfBits
+	EMBSignallingLCFragmentBits = 32
+)
 
 // Because Go doesn't have binary literals ("We've found hex and octal to be sufficient")
 const (
@@ -259,3 +276,33 @@ const (
 	B11111110
 	B11111111
 )
+
+// BytesToBits converts a byte slice to a byte slice representing the individual data bits.
+func BytesToBits(data []byte) []byte {
+	var bits = make([]byte, len(data)*8)
+	for i := 0; i < len(data); i++ {
+		copy(bits[i*8:], toBits(data[i]))
+	}
+	return bits
+}
+
+func toBits(b byte) []byte {
+	var o = make([]byte, 8)
+	for bit, mask := 0, byte(128); bit < 8; bit, mask = bit+1, mask>>1 {
+		if b&mask != 0 {
+			o[bit] = 1
+		}
+	}
+	return o
+}
+
+// BitsToBytes converts a byte slice of bits to a byte slice.
+func BitsToBytes(bits []byte) []byte {
+	var data = make([]byte, (len(bits)+7)/8)
+	for i, b := range bits {
+		if b == 0x01 {
+			data[i/8] |= (1 << byte(7-(i%8)))
+		}
+	}
+	return data
+}

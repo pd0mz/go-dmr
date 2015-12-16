@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/tehmaze/go-dmr/bit"
 	"github.com/tehmaze/go-dmr/dmr"
 )
 
@@ -70,8 +69,8 @@ type Packet struct {
 	CallType    uint8 // 0=private, 1=group
 	SrcID       uint32
 	DstID       uint32
-	Payload     []byte   // 34 bytes
-	PayloadBits bit.Bits // 264 bits
+	Payload     []byte // 34 bytes
+	PayloadBits []byte // 264 bits
 	Sequence    uint8
 }
 
@@ -90,15 +89,15 @@ func (p *Packet) Dump() string {
 	return s
 }
 
-func (p *Packet) InfoBits() bit.Bits {
-	var b = make(bit.Bits, dmr.InfoBits)
+func (p *Packet) InfoBits() []byte {
+	var b = make([]byte, dmr.InfoBits)
 	copy(b[0:dmr.InfoHalfBits], p.PayloadBits[0:dmr.InfoHalfBits])
 	copy(b[dmr.InfoHalfBits:], p.PayloadBits[dmr.InfoHalfBits+dmr.SlotTypeBits+dmr.SignalBits:])
 	return b
 }
 
-func (p *Packet) VoiceBits() bit.Bits {
-	var b = make(bit.Bits, dmr.VoiceBits)
+func (p *Packet) VoiceBits() []byte {
+	var b = make([]byte, dmr.VoiceBits)
 	copy(b[:dmr.VoiceHalfBits], p.PayloadBits[:dmr.VoiceHalfBits])
 	copy(b[dmr.VoiceHalfBits:], p.PayloadBits[dmr.VoiceHalfBits+dmr.SignalBits:])
 	return b

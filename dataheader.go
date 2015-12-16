@@ -1,10 +1,25 @@
 package dmr
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/tehmaze/go-dmr/bit"
-)
+var DataTypeName = [16]string{
+	"PI Header",        // 0000
+	"VOICE Header:",    // 0001
+	"TLC:",             // 0010
+	"CSBK:",            // 0011
+	"MBC Header:",      // 0100
+	"MBC:",             // 0101
+	"DATA Header:",     // 0110
+	"RATE 1/2 DATA:",   // 0111
+	"RATE 3/4 DATA:",   // 1000
+	"Slot idle",        // 1001
+	"Rate 1 DATA",      // 1010
+	"Unknown/Bad (11)", // 1011
+	"Unknown/Bad (12)", // 1100
+	"Unknown/Bad (13)", // 1101
+	"Unknown/Bad (14)", // 1110
+	"Unknown/Bad (15)", // 1111
+}
 
 // Data Header Packet Format
 const (
@@ -247,8 +262,8 @@ func ParseDataHeader(header []byte, proprietary bool) (DataHeader, error) {
 	if proprietary {
 		return ProprietaryDataHeader{
 			Common: DataHeaderCommon{
-				ServiceAccessPoint: (header[0] & bit.B11110000) >> 4,
-				PacketFormat:       (header[0] & bit.B00001111),
+				ServiceAccessPoint: (header[0] & B11110000) >> 4,
+				PacketFormat:       (header[0] & B00001111),
 				CRC:                ccrc,
 			},
 			ManufacturerID: header[1],
@@ -266,55 +281,55 @@ func ParseDataHeader(header []byte, proprietary bool) (DataHeader, error) {
 	case PacketFormatUDT:
 		return UDTDataHeader{
 			Common:            common,
-			Format:            (header[1] & bit.B00001111),
-			PadNibble:         (header[8] & bit.B11111000) >> 3,
-			AppendedBlocks:    (header[8] & bit.B00000011),
-			SupplementaryFlag: (header[9] & bit.B10000000) > 0,
-			OPCode:            (header[9] & bit.B00111111),
+			Format:            (header[1] & B00001111),
+			PadNibble:         (header[8] & B11111000) >> 3,
+			AppendedBlocks:    (header[8] & B00000011),
+			SupplementaryFlag: (header[9] & B10000000) > 0,
+			OPCode:            (header[9] & B00111111),
 		}, nil
 	case PacketFormatResponse:
 		return ResponseDataHeader{
 			Common:         common,
-			BlocksToFollow: (header[8] & bit.B01111111),
-			Class:          (header[9] & bit.B11000000) >> 6,
-			Type:           (header[9] & bit.B00111000) >> 3,
-			Status:         (header[9] & bit.B00000111),
+			BlocksToFollow: (header[8] & B01111111),
+			Class:          (header[9] & B11000000) >> 6,
+			Type:           (header[9] & B00111000) >> 3,
+			Status:         (header[9] & B00000111),
 		}, nil
 	case PacketFormatUnconfirmedData:
 		return UnconfirmedDataHeader{
 			Common:                 common,
-			PadOctetCount:          (header[0] & bit.B00010000) | (header[1] & bit.B00001111),
-			FullMessage:            (header[8] & bit.B10000000) > 0,
-			BlocksToFollow:         (header[8] & bit.B01111111),
-			FragmentSequenceNumber: (header[9] & bit.B00001111),
+			PadOctetCount:          (header[0] & B00010000) | (header[1] & B00001111),
+			FullMessage:            (header[8] & B10000000) > 0,
+			BlocksToFollow:         (header[8] & B01111111),
+			FragmentSequenceNumber: (header[9] & B00001111),
 		}, nil
 	case PacketFormatConfirmedData:
 		return ConfirmedDataHeader{
 			Common:                 common,
-			PadOctetCount:          (header[0] & bit.B00010000) | (header[1] & bit.B00001111),
-			FullMessage:            (header[8] & bit.B10000000) > 0,
-			BlocksToFollow:         (header[8] & bit.B01111111),
-			Resync:                 (header[9] & bit.B10000000) > 0,
-			SendSequenceNumber:     (header[9] & bit.B01110000) >> 4,
-			FragmentSequenceNumber: (header[9] & bit.B00001111),
+			PadOctetCount:          (header[0] & B00010000) | (header[1] & B00001111),
+			FullMessage:            (header[8] & B10000000) > 0,
+			BlocksToFollow:         (header[8] & B01111111),
+			Resync:                 (header[9] & B10000000) > 0,
+			SendSequenceNumber:     (header[9] & B01110000) >> 4,
+			FragmentSequenceNumber: (header[9] & B00001111),
 		}, nil
 	case PacketFormatShortDataRaw:
 		return ShortDataRawDataHeader{
 			Common:         common,
-			AppendedBlocks: (header[0] & bit.B00110000) | (header[1] & bit.B00001111),
-			SrcPort:        (header[8] & bit.B11100000) >> 5,
-			DstPort:        (header[8] & bit.B00011100) >> 2,
-			Resync:         (header[8] & bit.B00000010) > 0,
-			FullMessage:    (header[8] & bit.B00000001) > 0,
+			AppendedBlocks: (header[0] & B00110000) | (header[1] & B00001111),
+			SrcPort:        (header[8] & B11100000) >> 5,
+			DstPort:        (header[8] & B00011100) >> 2,
+			Resync:         (header[8] & B00000010) > 0,
+			FullMessage:    (header[8] & B00000001) > 0,
 			BitPadding:     (header[9]),
 		}, nil
 	case PacketFormatShortDataDefined:
 		return ShortDataDefinedDataHeader{
 			Common:         common,
-			AppendedBlocks: (header[0] & bit.B00110000) | (header[1] & bit.B00001111),
-			DDFormat:       (header[8] & bit.B11111100) >> 2,
-			Resync:         (header[8] & bit.B00000010) > 0,
-			FullMessage:    (header[8] & bit.B00000001) > 0,
+			AppendedBlocks: (header[0] & B00110000) | (header[1] & B00001111),
+			DDFormat:       (header[8] & B11111100) >> 2,
+			Resync:         (header[8] & B00000010) > 0,
+			FullMessage:    (header[8] & B00000001) > 0,
 			BitPadding:     (header[9]),
 		}, nil
 	default:

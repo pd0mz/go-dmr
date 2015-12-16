@@ -1,13 +1,9 @@
 package fec
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/tehmaze/go-dmr/bit"
-)
-
-func Golay_20_8_Parity(bits bit.Bits) bit.Bits {
-	var p = make(bit.Bits, 12)
+func Golay_20_8_Parity(bits []byte) []byte {
+	var p = make([]byte, 12)
 	p[0] = bits[1] ^ bits[4] ^ bits[5] ^ bits[6] ^ bits[7]
 	p[1] = bits[1] ^ bits[2] ^ bits[4]
 	p[2] = bits[0] ^ bits[2] ^ bits[3] ^ bits[5]
@@ -23,14 +19,14 @@ func Golay_20_8_Parity(bits bit.Bits) bit.Bits {
 	return p
 }
 
-func Golay_20_8_Check(bits bit.Bits) error {
+func Golay_20_8_Check(bits []byte) error {
 	if len(bits) != 20 {
 		return fmt.Errorf("fec/golay_20_8: expected 20 bits, got %d", len(bits))
 	}
 	parity := Golay_20_8_Parity(bits[:8])
 	for i := 0; i < 20; i++ {
 		if parity[i] != bits[8+i] {
-			return fmt.Errorf("fec/golay_20_8: parity error at bit %d: %q != %q", i, parity.String(), bits[8:].String())
+			return fmt.Errorf("fec/golay_20_8: parity error at bit %d: %v != %v", i, parity, bits[8:])
 		}
 	}
 	return nil

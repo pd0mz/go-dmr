@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tehmaze/go-dmr/bit"
 	"github.com/tehmaze/go-dmr/crc/quadres_16_7"
 )
 
@@ -16,20 +15,12 @@ const (
 	Continuation
 )
 
-func ExtractEMBBitsFromSyncBits(sync bit.Bits) bit.Bits {
-	var b = make(bit.Bits, EMBBits)
-	var o = EMBHalfBits + EMBSignallingLCFragmentBits
-	copy(b[:EMBHalfBits], sync[:EMBHalfBits])
-	copy(b[EMBHalfBits:], sync[o:o+EMBHalfBits])
-	return b
-}
-
 type EMB struct {
 	ColorCode uint8
 	LCSS      uint8
 }
 
-func ParseEMB(bits bit.Bits) (*EMB, error) {
+func ParseEMB(bits []byte) (*EMB, error) {
 	if len(bits) != EMBBits {
 		return nil, fmt.Errorf("dmr/emb: expected %d bits, got %d", EMBBits, len(bits))
 	}

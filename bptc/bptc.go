@@ -3,11 +3,11 @@ package bptc
 import (
 	"fmt"
 
-	"github.com/tehmaze/go-dmr/bit"
+	"github.com/tehmaze/go-dmr"
 	"github.com/tehmaze/go-dmr/fec"
 )
 
-func Process(info bit.Bits, payload []byte) error {
+func Process(info []byte, payload []byte) error {
 	if len(info) < 196 {
 		return fmt.Errorf("bptc: info size %d too small, need at least 196 bits", len(info))
 	}
@@ -17,8 +17,8 @@ func Process(info bit.Bits, payload []byte) error {
 
 	var (
 		i, j, k   uint32
-		datafr    = make(bit.Bits, 196)
-		extracted = make(bit.Bits, 96)
+		datafr    = make([]byte, 196)
+		extracted = make([]byte, 96)
 	)
 
 	// Deinterleave bits
@@ -41,7 +41,7 @@ func Process(info bit.Bits, payload []byte) error {
 		fec.Hamming15_11_3_Correct(&codeword)
 		codeword &= 0x01ff
 		for j = 0; j < 9; j++ {
-			datafr[j*15+i] = bit.Bit((codeword >> (8 - j)) & 1)
+			datafr[j*15+i] = byte((codeword >> (8 - j)) & 1)
 		}
 	}
 	for j = 0; j < 9; j++ {
@@ -52,7 +52,7 @@ func Process(info bit.Bits, payload []byte) error {
 		}
 		fec.Hamming15_11_3_Correct(&codeword)
 		for i = 0; i < 11; i++ {
-			datafr[j*15+10-i] = bit.Bit((codeword >> i) & 1)
+			datafr[j*15+10-i] = byte((codeword >> i) & 1)
 		}
 	}
 
@@ -66,7 +66,7 @@ func Process(info bit.Bits, payload []byte) error {
 		}
 	}
 
-	copy(payload, extracted.Bytes())
+	copy(payload, dmr.BitsToBytes(extracted))
 
 	return nil
 }

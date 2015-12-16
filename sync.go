@@ -2,13 +2,11 @@ package dmr
 
 import (
 	"bytes"
-
-	"github.com/tehmaze/go-dmr/bit"
 )
 
 // Table 9.2: SYNC Patterns
 const (
-	SyncPatternBSSourcedVoice uint16 = 1 << iota
+	SyncPatternBSSourcedVoice uint8 = iota
 	SyncPatternBSSourcedData
 	SyncPatternMSSourcedVoice
 	SyncPatternMSSourcedData
@@ -30,7 +28,7 @@ var (
 	directDataTS1   = []byte{0xf7, 0xfd, 0xd5, 0xdd, 0xfd, 0x55}
 	directVoiceTS2  = []byte{0x7d, 0xff, 0xd5, 0xf5, 0x5d, 0x5f}
 	directDataTS2   = []byte{0xd7, 0x55, 0x7f, 0x5f, 0xf7, 0xf5}
-	SyncPatternName = map[uint16]string{
+	SyncPatternName = map[uint8]string{
 		SyncPatternBSSourcedVoice: "bs sourced voice",
 		SyncPatternBSSourcedData:  "bs sourced data",
 		SyncPatternMSSourcedVoice: "ms sourced voice",
@@ -44,12 +42,8 @@ var (
 	}
 )
 
-func ExtractSyncBits(payload bit.Bits) bit.Bits {
-	return payload[108:156]
-}
-
-func SyncPattern(bits bit.Bits) uint16 {
-	var b = bits.Bytes()
+func SyncPattern(bits []byte) uint8 {
+	var b = BitsToBytes(bits)
 	switch {
 	case bytes.Equal(b, bsSourcedVoice):
 		return SyncPatternBSSourcedVoice

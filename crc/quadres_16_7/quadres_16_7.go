@@ -1,18 +1,18 @@
 // Package quadres_16_7 implements the quadratic residue (16, 7, 6) parity check.
 package quadres_16_7
 
-import "github.com/tehmaze/go-dmr/bit"
+import "bytes"
 
 var (
-	validDataParities = [128]bit.Bits{}
+	validDataParities = [128][]byte{}
 )
 
 type Codeword struct {
-	Data   bit.Bits
-	Parity bit.Bits
+	Data   []byte
+	Parity []byte
 }
 
-func NewCodeword(bits bit.Bits) *Codeword {
+func NewCodeword(bits []byte) *Codeword {
 	if len(bits) < 16 {
 		return nil
 	}
@@ -23,8 +23,8 @@ func NewCodeword(bits bit.Bits) *Codeword {
 	}
 }
 
-func ParityBits(bits bit.Bits) bit.Bits {
-	parity := make(bit.Bits, 9)
+func ParityBits(bits []byte) []byte {
+	parity := make([]byte, 9)
 	// Multiplying the generator matrix with the given data bits.
 	// See DMR AI spec. page 134.
 	parity[0] = bits[1] ^ bits[2] ^ bits[3] ^ bits[4]
@@ -39,7 +39,7 @@ func ParityBits(bits bit.Bits) bit.Bits {
 	return parity
 }
 
-func Check(bits bit.Bits) bool {
+func Check(bits []byte) bool {
 	codeword := NewCodeword(bits)
 	if codeword == nil {
 		return false
@@ -52,12 +52,22 @@ func Check(bits bit.Bits) bool {
 		}
 	}
 
-	return codeword.Parity.Equal(validDataParities[dataval])
+	return bytes.Equal(codeword.Parity, validDataParities[dataval])
+}
+
+func toBits(b byte) []byte {
+	var o = make([]byte, 8)
+	for bit, mask := 0, byte(128); bit < 8; bit, mask = bit+1, mask>>1 {
+		if b&mask != 0 {
+			o[bit] = 1
+		}
+	}
+	return o
 }
 
 func init() {
 	for i := byte(0); i < 128; i++ {
-		bits := bit.NewBits([]byte{i})
+		bits := toBits(i)
 		validDataParities[i] = ParityBits(bits)
 	}
 }
