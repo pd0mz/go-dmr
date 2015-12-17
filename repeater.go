@@ -5,4 +5,7 @@ type Repeater interface {
 	Active() bool
 	Close() error
 	ListenAndServe() error
+
+	GetPacketFunc() PacketFunc
+	SetPacketFunc(PacketFunc)
 }

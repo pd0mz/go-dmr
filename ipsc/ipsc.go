@@ -1,3 +1,4 @@
+// Package ipsc implements the Motorola IP Site Connect protocol.
 package ipsc
 
 import (

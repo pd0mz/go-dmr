@@ -3,7 +3,7 @@ package homebrew
 import (
 	"fmt"
 
-	"github.com/tehmaze/go-dmr"
+	"github.com/pd0mz/go-dmr"
 )
 
 // RepeaterConfiguration holds information about the current repeater. It
@@ -22,6 +22,8 @@ type RepeaterConfiguration struct {
 	Location    string
 	Description string
 	URL         string
+	SoftwareID  string
+	PackageID   string
 }
 
 // Bytes returns the configuration as bytes.
@@ -39,6 +41,12 @@ func (r *RepeaterConfiguration) String() string {
 	}
 	if r.TXPower > 99 {
 		r.TXPower = 99
+	}
+	if r.SoftwareID == "" {
+		r.SoftwareID = dmr.SoftwareID
+	}
+	if r.PackageID == "" {
+		r.PackageID = dmr.PackageID
 	}
 
 	var lat = fmt.Sprintf("%-08f", r.Latitude)
@@ -63,8 +71,8 @@ func (r *RepeaterConfiguration) String() string {
 	b += fmt.Sprintf("%-20s", r.Location)
 	b += fmt.Sprintf("%-20s", r.Description)
 	b += fmt.Sprintf("%-124s", r.URL)
-	b += fmt.Sprintf("%-40s", dmr.SoftwareID)
-	b += fmt.Sprintf("%-40s", dmr.PackageID)
+	b += fmt.Sprintf("%-40s", r.SoftwareID)
+	b += fmt.Sprintf("%-40s", r.PackageID)
 	return b
 }
 

@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/tehmaze/go-dmr/dmr"
+	"github.com/pd0mz/go-dmr"
 )
 
 const (
@@ -63,15 +63,15 @@ var (
 )
 
 type Packet struct {
-	Timeslot    uint8 // 0=ts1, 1=ts2
-	FrameType   uint8
-	SlotType    uint16
-	CallType    uint8 // 0=private, 1=group
-	SrcID       uint32
-	DstID       uint32
-	Payload     []byte // 34 bytes
-	PayloadBits []byte // 264 bits
-	Sequence    uint8
+	Timeslot  uint8 // 0=ts1, 1=ts2
+	FrameType uint8
+	SlotType  uint16
+	CallType  uint8 // 0=private, 1=group
+	SrcID     uint32
+	DstID     uint32
+	Payload   []byte // 34 bytes
+	Bits      []byte // 264 bits
+	Sequence  uint8
 }
 
 func (p *Packet) Dump() string {
@@ -84,21 +84,21 @@ func (p *Packet) Dump() string {
 	s += fmt.Sprintf("target....: %d\n", p.DstID)
 	s += fmt.Sprintf("payload...: %d bytes (swapped):\n", len(p.Payload))
 	s += hex.Dump(p.Payload)
-	s += fmt.Sprintf("payload...: %d bits:\n", len(p.PayloadBits))
-	s += p.PayloadBits.Dump()
+	s += fmt.Sprintf("payload...: %d bits:\n", len(p.Bits))
+	s += hex.Dump(p.Bits)
 	return s
 }
 
 func (p *Packet) InfoBits() []byte {
 	var b = make([]byte, dmr.InfoBits)
-	copy(b[0:dmr.InfoHalfBits], p.PayloadBits[0:dmr.InfoHalfBits])
-	copy(b[dmr.InfoHalfBits:], p.PayloadBits[dmr.InfoHalfBits+dmr.SlotTypeBits+dmr.SignalBits:])
+	copy(b[0:dmr.InfoHalfBits], p.Bits[0:dmr.InfoHalfBits])
+	copy(b[dmr.InfoHalfBits:], p.Bits[dmr.InfoHalfBits+dmr.SlotTypeBits+dmr.SignalBits:])
 	return b
 }
 
 func (p *Packet) VoiceBits() []byte {
 	var b = make([]byte, dmr.VoiceBits)
-	copy(b[:dmr.VoiceHalfBits], p.PayloadBits[:dmr.VoiceHalfBits])
-	copy(b[dmr.VoiceHalfBits:], p.PayloadBits[dmr.VoiceHalfBits+dmr.SignalBits:])
+	copy(b[:dmr.VoiceHalfBits], p.Bits[:dmr.VoiceHalfBits])
+	copy(b[dmr.VoiceHalfBits:], p.Bits[dmr.VoiceHalfBits+dmr.SignalBits:])
 	return b
 }

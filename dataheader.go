@@ -2,25 +2,6 @@ package dmr
 
 import "fmt"
 
-var DataTypeName = [16]string{
-	"PI Header",        // 0000
-	"VOICE Header:",    // 0001
-	"TLC:",             // 0010
-	"CSBK:",            // 0011
-	"MBC Header:",      // 0100
-	"MBC:",             // 0101
-	"DATA Header:",     // 0110
-	"RATE 1/2 DATA:",   // 0111
-	"RATE 3/4 DATA:",   // 1000
-	"Slot idle",        // 1001
-	"Rate 1 DATA",      // 1010
-	"Unknown/Bad (11)", // 1011
-	"Unknown/Bad (12)", // 1100
-	"Unknown/Bad (13)", // 1101
-	"Unknown/Bad (14)", // 1110
-	"Unknown/Bad (15)", // 1111
-}
-
 // Data Header Packet Format
 const (
 	PacketFormatUDT              uint8 = iota // 0b0000

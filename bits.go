@@ -1,10 +1,11 @@
 package dmr
 
+// Various sizes of information chunks.
 const (
 	PayloadBits                 = 98 + 10 + 48 + 10 + 98
-	PayloadSize                 = 33
 	InfoHalfBits                = 98
 	InfoBits                    = 2 * InfoHalfBits
+	InfoSize                    = 12 // After BPTC(196, 96) decoding
 	SlotTypeHalfBits            = 10
 	SlotTypeBits                = 2 * SlotTypeHalfBits
 	SignalBits                  = 48

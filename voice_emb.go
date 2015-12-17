@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tehmaze/go-dmr/crc/quadres_16_7"
+	"github.com/pd0mz/go-dmr/crc/quadres_16_7"
 )
 
 // EMB LCSS fragments

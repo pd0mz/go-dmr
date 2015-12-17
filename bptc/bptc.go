@@ -3,11 +3,11 @@ package bptc
 import (
 	"fmt"
 
-	"github.com/tehmaze/go-dmr"
-	"github.com/tehmaze/go-dmr/fec"
+	"github.com/pd0mz/go-dmr"
+	"github.com/pd0mz/go-dmr/fec"
 )
 
-func Process(info []byte, payload []byte) error {
+func Decode(info []byte, payload []byte) error {
 	if len(info) < 196 {
 		return fmt.Errorf("bptc: info size %d too small, need at least 196 bits", len(info))
 	}
