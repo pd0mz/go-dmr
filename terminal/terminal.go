@@ -35,7 +35,7 @@ type Slot struct {
 		blocks            []*dmr.DataBlock
 		blocksExpected    int
 		blocksReceived    int
-		header            dmr.DataHeader
+		header            *dmr.DataHeader
 	}
 	voice struct {
 		lastFrame uint8
@@ -165,8 +165,7 @@ func (t *Terminal) dataBlock(p *dmr.Packet, db *dmr.DataBlock) error {
 	if slot.data.header == nil {
 		return errors.New("terminal: logic error, header is nil?!")
 	}
-	h := slot.data.header.CommonHeader()
-	if h.ResponseRequested {
+	if slot.data.header.ResponseRequested {
 		// Only confirmed data blocks have serial numbers stored in them.
 		if int(db.Serial) < len(slot.data.blocks) {
 			slot.data.blocks[db.Serial] = db
@@ -201,7 +200,7 @@ func (t *Terminal) dataBlockAssemble(p *dmr.Packet) error {
 	}
 
 	if errorsFound {
-		_, responseOk := slot.data.header.(*dmr.ResponseDataHeader)
+		_, responseOk := slot.data.header.Data.(*dmr.ResponseData)
 		switch {
 		case responseOk:
 			t.debugf(p, "found erroneous blocks, not sending out ACK for response")
@@ -222,7 +221,7 @@ func (t *Terminal) dataBlockAssemble(p *dmr.Packet) error {
 
 	if fragment.Stored > 0 {
 		// Response with data blocks? That must be a selective ACK
-		if _, ok := slot.data.header.(*dmr.ResponseDataHeader); ok {
+		if _, ok := slot.data.header.Data.(*dmr.ResponseData); ok {
 			// FIXME(pd0mz): deal with this shit
 			return nil
 		}
@@ -232,7 +231,7 @@ func (t *Terminal) dataBlockAssemble(p *dmr.Packet) error {
 		}
 
 		// If we are not waiting for an ack, then the data session ended
-		if !slot.data.header.CommonHeader().ResponseRequested {
+		if !slot.data.header.ResponseRequested {
 			return t.dataCallEnd(p)
 		}
 	}
@@ -248,7 +247,7 @@ func (t *Terminal) dataBlockComplete(p *dmr.Packet, f *dmr.DataFragment) error {
 		ddformat = dmr.DDFormatUTF16
 	)
 
-	switch slot.data.header.CommonHeader().ServiceAccessPoint {
+	switch slot.data.header.ServiceAccessPoint {
 	case dmr.ServiceAccessPointIPBasedPacketData:
 		t.debugf(p, "SAP IP based packet data (not implemented)")
 		break
@@ -259,7 +258,7 @@ func (t *Terminal) dataBlockComplete(p *dmr.Packet, f *dmr.DataFragment) error {
 		data = f.Data[2:]       // Hytera has a 2 byte pre-padding
 		size = f.Stored - 2 - 4 // Leave out the CRC
 
-		if sdd, ok := slot.data.header.(*dmr.ShortDataDefinedDataHeader); ok {
+		if sdd, ok := slot.data.header.Data.(*dmr.ShortDataDefinedData); ok {
 			ddformat = sdd.DDFormat
 		}
 		break
@@ -449,14 +448,14 @@ func (t *Terminal) handleData(p *dmr.Packet) error {
 	slot.rxSequence = 0
 
 	t.debugf(p, "data header: %T", h)
-	switch ht := h.(type) {
-	case dmr.ShortDataDefinedDataHeader:
-		if ht.FullMessage {
-			slot.fullMessageBlocks = int(ht.AppendedBlocks)
+	switch d := h.Data.(type) {
+	case dmr.ShortDataDefinedData:
+		if d.FullMessage {
+			slot.fullMessageBlocks = int(d.AppendedBlocks)
 			slot.data.blocks = make([]*dmr.DataBlock, slot.fullMessageBlocks)
 			t.debugf(p, "expecting %d data block", slot.fullMessageBlocks)
 		}
-		slot.data.blocksExpected = int(ht.AppendedBlocks)
+		slot.data.blocksExpected = int(d.AppendedBlocks)
 		err = t.dataCallStart(p)
 		break
 
@@ -494,7 +493,7 @@ func (t *Terminal) handleRate34Data(p *dmr.Packet) error {
 		return err
 	}
 
-	db, err := dmr.ParseDataBlock(data, dmr.Rate34Data, slot.data.header.CommonHeader().ResponseRequested)
+	db, err := dmr.ParseDataBlock(data, dmr.Rate34Data, slot.data.header.ResponseRequested)
 	if err != nil {
 		return err
 	}
