@@ -1,8 +1,10 @@
 language: go
 
 go:
+  # Debian/Ubuntu ships with older Go
+  - 1.3.3
+  # Recent stable Go
   - 1.5.2
-  - tip
 
 install:
   - go get -d -v ./...
