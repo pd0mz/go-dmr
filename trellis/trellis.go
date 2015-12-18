@@ -3,7 +3,6 @@ package trellis
 import (
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/pd0mz/go-dmr"
 )
@@ -29,10 +28,6 @@ var (
 		6, 14, 0, 8, 4, 12, 2, 10,
 	}
 )
-
-func init() {
-	log.Printf("interleave matrix has %d points\n", len(interleaveMatrix))
-}
 
 // Decode is a convenience function that takes 196 Info bits and decodes them to 18 bytes (144 bits) binary using Trellis decoding.
 func Decode(bits []byte, bytes []byte) error {

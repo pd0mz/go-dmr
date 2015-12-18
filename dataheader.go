@@ -22,6 +22,21 @@ const (
 	PacketFormatProprietaryData               // 0b1111
 )
 
+// Service Access Point
+const (
+	ServiceAccessPointUDT                    uint8 = iota // 0b0000
+	_                                                     // 0b0001
+	ServiceAccessPointTCPIPHeaderCompression              // 0b0010
+	ServiceAccessPointUDPIPHeaderCompression              // 0b0011
+	ServiceAccessPointIPBasedPacketData                   // 0b0100
+	ServiceAccessPointARP                                 // 0b0101
+	_                                                     // 0b0110
+	_                                                     // 0b0111
+	_                                                     // 0b1000
+	ServiceAccessPointProprietaryData                     // 0b1001
+	ServiceAccessPointShortData                           // 0b1010
+)
+
 // Response Data Header Response Type
 const (
 	ResponseTypeACK uint8 = iota
@@ -131,53 +146,95 @@ var DDFormatName = map[uint8]string{
 	DDFormatUTF32LE:        "UTF-32 little endian",
 }
 
-type DataHeader interface {
-	CommonHeader() DataHeaderCommon
+// http://www.etsi.org/images/files/DMRcodes/dmrs-mfid.xls
+var ManufacturerName = map[uint8]string{
+	0x00: "Reserved",
+	0x01: "Reserved",
+	0x02: "Reserved",
+	0x03: "Reserved",
+	0x04: "Flyde Micro Ltd.",
+	0x05: "PROD-EL SPA",
+	0x06: "Trident Datacom DBA Trident Micro Systems",
+	0x07: "RADIODATA GmbH",
+	0x08: "HYT science tech",
+	0x09: "ASELSAN Elektronik Sanayi ve Ticaret A.S.",
+	0x0a: "Kirisun Communications Co. Ltd",
+	0x0b: "DMR Association Ltd.",
+	0x10: "Motorola Ltd.",
+	0x13: "EMC S.p.A. (Electronic Marketing Company)",
+	0x1c: "EMC S.p.A. (Electronic Marketing Company)",
+	0x20: "JVCKENWOOD Corporation",
+	0x33: "Radio Activity Srl",
+	0x3c: "Radio Activity Srl",
+	0x58: "Tait Electronics Ltd",
+	0x68: "HYT science tech",
+	0x77: "Vertex Standard",
 }
 
-type DataHeaderCommon struct {
+type DataHeaderData interface {
+	String() string
+	Write([]byte) error
+}
+
+type DataHeader struct {
 	PacketFormat       uint8
 	DstIsGroup         bool
 	ResponseRequested  bool
+	HeaderCompression  bool
 	ServiceAccessPoint uint8
 	DstID              uint32
 	SrcID              uint32
 	CRC                uint16
+	Data               DataHeaderData
 }
 
-func (h *DataHeaderCommon) Parse(header []byte) error {
-	h.PacketFormat = header[0] & 0xf
-	h.DstIsGroup = (header[0] & 0x80) > 0
-	h.ResponseRequested = (header[0] & 0x40) > 0
-	h.ServiceAccessPoint = (header[1] & 0xf0) >> 4
-	h.DstID = uint32(header[2])<<16 | uint32(header[3])<<8 | uint32(header[4])
-	h.SrcID = uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7])
-	return nil
-}
-
-type UDTDataHeader struct {
-	Common            DataHeaderCommon
+type UDTData struct {
 	Format            uint8
 	PadNibble         uint8
 	AppendedBlocks    uint8
 	SupplementaryFlag bool
-	OPCode            uint8
+	Opcode            uint8
 }
 
-func (h UDTDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d UDTData) String() string {
+	return fmt.Sprintf("UDT, format %s (%d), pad nibble %d, appended blocks %d, supplementary %t, opcode %d",
+		UDTFormatName[d.Format], d.Format, d.PadNibble, d.AppendedBlocks, d.SupplementaryFlag, d.Opcode)
+}
 
-type UnconfirmedDataHeader struct {
-	Common                 DataHeaderCommon
+func (d UDTData) Write(data []byte) error {
+	data[1] |= (d.Format & B00001111)
+	data[8] = (d.AppendedBlocks & B00000011) | (d.PadNibble << 3)
+	data[9] = (d.Opcode & B00111111)
+	if d.SupplementaryFlag {
+		data[9] |= B10000000
+	}
+	return nil
+}
+
+type UnconfirmedData struct {
 	PadOctetCount          uint8
 	FullMessage            bool
 	BlocksToFollow         uint8
 	FragmentSequenceNumber uint8
 }
 
-func (h UnconfirmedDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d UnconfirmedData) String() string {
+	return fmt.Sprintf("unconfirmed, pad octet %d, full %t, blocks %d, sequence %d",
+		d.PadOctetCount, d.FullMessage, d.BlocksToFollow, d.FragmentSequenceNumber)
+}
 
-type ConfirmedDataHeader struct {
-	Common                 DataHeaderCommon
+func (d UnconfirmedData) Write(data []byte) error {
+	data[0] |= d.PadOctetCount & B00010000
+	data[1] |= d.PadOctetCount & B00001111
+	data[8] = d.BlocksToFollow & B01111111
+	if d.FullMessage {
+		data[8] |= B10000000
+	}
+	data[9] = d.FragmentSequenceNumber & B00001111
+	return nil
+}
+
+type ConfirmedData struct {
 	PadOctetCount          uint8
 	FullMessage            bool
 	BlocksToFollow         uint8
@@ -186,27 +243,58 @@ type ConfirmedDataHeader struct {
 	FragmentSequenceNumber uint8
 }
 
-func (h ConfirmedDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d ConfirmedData) String() string {
+	return fmt.Sprintf("confirmed, pad octet %d, full %t, blocks %d, resync %t, send sequence %d, sequence %d",
+		d.PadOctetCount, d.FullMessage, d.BlocksToFollow, d.Resync, d.SendSequenceNumber, d.FragmentSequenceNumber)
+}
 
-type ResponseDataHeader struct {
-	Common         DataHeaderCommon
+func (d ConfirmedData) Write(data []byte) error {
+	data[0] |= d.PadOctetCount & B00010000
+	data[1] |= d.PadOctetCount & B00001111
+	data[8] = d.BlocksToFollow & B01111111
+	if d.FullMessage {
+		data[8] |= B10000000
+	}
+	data[9] = (d.FragmentSequenceNumber&B00000111)<<0 | (d.SendSequenceNumber&B00000111)<<4
+	if d.Resync {
+		data[9] |= B10000000
+	}
+	return nil
+}
+
+type ResponseData struct {
 	BlocksToFollow uint8
 	Class          uint8
 	Type           uint8
 	Status         uint8
 }
 
-func (h ResponseDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d ResponseData) String() string {
+	return fmt.Sprintf("response, blocks %d, class %d, type %s (%d), status %d",
+		d.BlocksToFollow, d.Class, ResponseTypeName[d.Type], d.Type, d.Status)
+}
 
-type ProprietaryDataHeader struct {
-	Common         DataHeaderCommon
+func (d ResponseData) Write(data []byte) error {
+	data[8] = d.BlocksToFollow & B01111111
+	data[9] = (d.Status&B00000111)<<0 | (d.Type&B00000111)<<3 | (d.Class&B00000011)<<6
+	return nil
+}
+
+type ProprietaryData struct {
 	ManufacturerID uint8
 }
 
-func (h ProprietaryDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d ProprietaryData) String() string {
+	return fmt.Sprintf("proprietary, manufacturer %s (%d)",
+		ManufacturerName[d.ManufacturerID], d.ManufacturerID)
+}
 
-type ShortDataRawDataHeader struct {
-	Common         DataHeaderCommon
+func (d ProprietaryData) Write(data []byte) error {
+	data[1] = (d.ManufacturerID & B01111111)
+	return nil
+}
+
+type ShortDataRawData struct {
 	AppendedBlocks uint8
 	SrcPort        uint8
 	DstPort        uint8
@@ -215,10 +303,26 @@ type ShortDataRawDataHeader struct {
 	BitPadding     uint8
 }
 
-func (h ShortDataRawDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d ShortDataRawData) String() string {
+	return fmt.Sprintf("short data raw, blocks %d, src port %d, dst port %d, rsync %t, full %t, padding %d",
+		d.AppendedBlocks, d.SrcPort, d.DstPort, d.Resync, d.FullMessage, d.BitPadding)
+}
 
-type ShortDataDefinedDataHeader struct {
-	Common         DataHeaderCommon
+func (d ShortDataRawData) Write(data []byte) error {
+	data[0] |= d.AppendedBlocks & B00110000
+	data[1] |= d.AppendedBlocks & B00001111
+	data[8] = (d.SrcPort&B00000111)<<5 | (d.DstPort&B00000111)<<2
+	if d.Resync {
+		data[8] |= B00000010
+	}
+	if d.FullMessage {
+		data[8] |= B00000001
+	}
+	data[9] = d.BitPadding
+	return nil
+}
+
+type ShortDataDefinedData struct {
 	AppendedBlocks uint8
 	DDFormat       uint8
 	Resync         bool
@@ -226,133 +330,135 @@ type ShortDataDefinedDataHeader struct {
 	BitPadding     uint8
 }
 
-func (h ShortDataDefinedDataHeader) CommonHeader() DataHeaderCommon { return h.Common }
+func (d ShortDataDefinedData) String() string {
+	return fmt.Sprintf("short data defined, blocks %d, dd format %s (%d), resync %t, full %t, padding %d",
+		d.AppendedBlocks, DDFormatName[d.DDFormat], d.DDFormat, d.Resync, d.FullMessage, d.BitPadding)
+}
 
-func ParseDataHeader(header []byte, proprietary bool) (DataHeader, error) {
-	if len(header) != 12 {
-		return nil, fmt.Errorf("header must be 12 bytes, got %d", len(header))
+func (d ShortDataDefinedData) Write(data []byte) error {
+	data[0] |= d.AppendedBlocks & B00110000
+	data[1] |= d.AppendedBlocks & B00001111
+	data[8] = (d.DDFormat & B00111111) << 2
+	if d.Resync {
+		data[8] |= B00000010
+	}
+	if d.FullMessage {
+		data[8] |= B00000001
+	}
+	data[9] = d.BitPadding
+	return nil
+}
+
+var _ (DataHeaderData) = (*ShortDataDefinedData)(nil)
+
+func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
+	if len(data) != 12 {
+		return nil, fmt.Errorf("data must be 12 bytes, got %d", len(data))
 	}
 	var (
-		ccrc = (uint16(header[10]) << 8) | uint16(header[11])
-		hcrc = dataHeaderCRC(header)
+		ccrc = (uint16(data[10]) << 8) | uint16(data[11])
+		hcrc = dataHeaderCRC(data)
 	)
 	if ccrc != hcrc {
-		return nil, fmt.Errorf("header CRC mismatch, %#04x != %#04x", ccrc, hcrc)
+		return nil, fmt.Errorf("data CRC mismatch, %#04x != %#04x", ccrc, hcrc)
+	}
+
+	h := &DataHeader{
+		DstIsGroup:         (data[0] & B10000000) > 0,
+		ResponseRequested:  (data[0] & B01000000) > 0,
+		HeaderCompression:  (data[0] & B00100000) > 0,
+		PacketFormat:       (data[0] & B00001111),
+		ServiceAccessPoint: (data[1] & B11110000) >> 4,
+		DstID:              uint32(data[2])<<16 | uint32(data[3])<<8 | uint32(data[4]),
+		SrcID:              uint32(data[5])<<16 | uint32(data[6])<<8 | uint32(data[7]),
+		CRC:                ccrc,
 	}
 
 	if proprietary {
-		return ProprietaryDataHeader{
-			Common: DataHeaderCommon{
-				ServiceAccessPoint: (header[0] & B11110000) >> 4,
-				PacketFormat:       (header[0] & B00001111),
-				CRC:                ccrc,
-			},
-			ManufacturerID: header[1],
-		}, nil
+		h.Data = ProprietaryData{
+			ManufacturerID: data[1] & B01111111,
+		}
+
+	} else {
+		switch h.PacketFormat {
+		case PacketFormatUDT:
+			h.Data = UDTData{
+				Format:            (data[1] & B00001111),
+				PadNibble:         (data[8] & B11111000) >> 3,
+				AppendedBlocks:    (data[8] & B00000011),
+				SupplementaryFlag: (data[9] & B10000000) > 0,
+				Opcode:            (data[9] & B00111111),
+			}
+			break
+
+		case PacketFormatResponse:
+			h.Data = ResponseData{
+				BlocksToFollow: (data[8] & B01111111),
+				Class:          (data[9] & B11000000) >> 6,
+				Type:           (data[9] & B00111000) >> 3,
+				Status:         (data[9] & B00000111),
+			}
+			break
+
+		case PacketFormatUnconfirmedData:
+			h.Data = UnconfirmedData{
+				PadOctetCount:          (data[0] & B00010000) | (data[1] & B00001111),
+				FullMessage:            (data[8] & B10000000) > 0,
+				BlocksToFollow:         (data[8] & B01111111),
+				FragmentSequenceNumber: (data[9] & B00001111),
+			}
+			break
+
+		case PacketFormatConfirmedData:
+			h.Data = ConfirmedData{
+				PadOctetCount:          (data[0] & B00010000) | (data[1] & B00001111),
+				FullMessage:            (data[8] & B10000000) > 0,
+				BlocksToFollow:         (data[8] & B01111111),
+				Resync:                 (data[9] & B10000000) > 0,
+				SendSequenceNumber:     (data[9] & B01110000) >> 4,
+				FragmentSequenceNumber: (data[9] & B00001111),
+			}
+			break
+
+		case PacketFormatShortDataRaw:
+			h.Data = ShortDataRawData{
+				AppendedBlocks: (data[0] & B00110000) | (data[1] & B00001111),
+				SrcPort:        (data[8] & B11100000) >> 5,
+				DstPort:        (data[8] & B00011100) >> 2,
+				Resync:         (data[8] & B00000010) > 0,
+				FullMessage:    (data[8] & B00000001) > 0,
+				BitPadding:     (data[9]),
+			}
+			break
+
+		case PacketFormatShortDataDefined:
+			h.Data = ShortDataDefinedData{
+				AppendedBlocks: (data[0] & B00110000) | (data[1] & B00001111),
+				DDFormat:       (data[8] & B11111100) >> 2,
+				Resync:         (data[8] & B00000010) > 0,
+				FullMessage:    (data[8] & B00000001) > 0,
+				BitPadding:     (data[9]),
+			}
+			break
+
+		default:
+			return nil, fmt.Errorf("dmr: unknown data data packet format %#02x (%d)", h.PacketFormat, h.PacketFormat)
+		}
 	}
 
-	common := DataHeaderCommon{
-		CRC: ccrc,
-	}
-	if err := common.Parse(header); err != nil {
-		return nil, err
-	}
-
-	switch common.PacketFormat {
-	case PacketFormatUDT:
-		return UDTDataHeader{
-			Common:            common,
-			Format:            (header[1] & B00001111),
-			PadNibble:         (header[8] & B11111000) >> 3,
-			AppendedBlocks:    (header[8] & B00000011),
-			SupplementaryFlag: (header[9] & B10000000) > 0,
-			OPCode:            (header[9] & B00111111),
-		}, nil
-	case PacketFormatResponse:
-		return ResponseDataHeader{
-			Common:         common,
-			BlocksToFollow: (header[8] & B01111111),
-			Class:          (header[9] & B11000000) >> 6,
-			Type:           (header[9] & B00111000) >> 3,
-			Status:         (header[9] & B00000111),
-		}, nil
-	case PacketFormatUnconfirmedData:
-		return UnconfirmedDataHeader{
-			Common:                 common,
-			PadOctetCount:          (header[0] & B00010000) | (header[1] & B00001111),
-			FullMessage:            (header[8] & B10000000) > 0,
-			BlocksToFollow:         (header[8] & B01111111),
-			FragmentSequenceNumber: (header[9] & B00001111),
-		}, nil
-	case PacketFormatConfirmedData:
-		return ConfirmedDataHeader{
-			Common:                 common,
-			PadOctetCount:          (header[0] & B00010000) | (header[1] & B00001111),
-			FullMessage:            (header[8] & B10000000) > 0,
-			BlocksToFollow:         (header[8] & B01111111),
-			Resync:                 (header[9] & B10000000) > 0,
-			SendSequenceNumber:     (header[9] & B01110000) >> 4,
-			FragmentSequenceNumber: (header[9] & B00001111),
-		}, nil
-	case PacketFormatShortDataRaw:
-		return ShortDataRawDataHeader{
-			Common:         common,
-			AppendedBlocks: (header[0] & B00110000) | (header[1] & B00001111),
-			SrcPort:        (header[8] & B11100000) >> 5,
-			DstPort:        (header[8] & B00011100) >> 2,
-			Resync:         (header[8] & B00000010) > 0,
-			FullMessage:    (header[8] & B00000001) > 0,
-			BitPadding:     (header[9]),
-		}, nil
-	case PacketFormatShortDataDefined:
-		return ShortDataDefinedDataHeader{
-			Common:         common,
-			AppendedBlocks: (header[0] & B00110000) | (header[1] & B00001111),
-			DDFormat:       (header[8] & B11111100) >> 2,
-			Resync:         (header[8] & B00000010) > 0,
-			FullMessage:    (header[8] & B00000001) > 0,
-			BitPadding:     (header[9]),
-		}, nil
-	default:
-		return nil, fmt.Errorf("dmr: unknown data header packet format %#02x (%d)", common.PacketFormat, common.PacketFormat)
-	}
+	return h, nil
 }
 
-func dataHeaderCRC(header []byte) uint16 {
+func dataHeaderCRC(data []byte) uint16 {
 	var crc uint16
-	if len(header) < 10 {
+	if len(data) < 10 {
 		return crc
 	}
 
 	for i := 0; i < 10; i++ {
-		crc16(&crc, header[i])
+		crc16(&crc, data[i])
 	}
 	crc16end(&crc)
 
 	return (^crc) ^ 0xcccc
-}
-
-func crc16(crc *uint16, b byte) {
-	var v = uint8(0x80)
-	for i := 0; i < 8; i++ {
-		xor := ((*crc) & 0x8000) > 0
-		(*crc) <<= 1
-		if b&v > 0 {
-			(*crc)++
-		}
-		if xor {
-			(*crc) ^= 0x1021
-		}
-		v >>= 1
-	}
-}
-
-func crc16end(crc *uint16) {
-	for i := 0; i < 16; i++ {
-		xor := ((*crc) & 0x8000) > 0
-		(*crc) <<= 1
-		if xor {
-			(*crc) ^= 0x1021
-		}
-	}
 }

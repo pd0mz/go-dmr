@@ -63,6 +63,7 @@ var (
 	AuthTimeout  = time.Second * 5
 	PingInterval = time.Second * 5
 	PingTimeout  = time.Second * 15
+	SendInterval = time.Millisecond * 30
 )
 
 // Peer is a remote repeater that also speaks the Homebrew protocol
@@ -110,8 +111,11 @@ type Homebrew struct {
 	conn   *net.UDPConn
 	closed bool
 	id     []byte
-	mutex  *sync.Mutex
+	last   time.Time   // Record last received frame time
+	mutex  *sync.Mutex // Mutex for manipulating peer list or send queue
+	rxtx   *sync.Mutex // Mutex for when receiving data or sending data
 	stop   chan bool
+	queue  []*dmr.Packet
 }
 
 // New creates a new Homebrew repeater
@@ -131,6 +135,7 @@ func New(config *RepeaterConfiguration, addr *net.UDPAddr) (*Homebrew, error) {
 		PeerID: make(map[uint32]*Peer),
 		id:     packRepeaterID(config.ID),
 		mutex:  &sync.Mutex{},
+		queue:  make([]*dmr.Packet, 0),
 	}
 	if h.conn, err = net.ListenUDP("udp", addr); err != nil {
 		return nil, errors.New("homebrew: " + err.Error())
@@ -239,6 +244,21 @@ func (h *Homebrew) ListenAndServe() error {
 	}
 
 	log.Info("listener closed")
+	return nil
+}
+
+// Send a packet to the peers. Will block until the packet is sent.
+func (h *Homebrew) Send(p *dmr.Packet) error {
+	h.rxtx.Lock()
+	defer h.rxtx.Unlock()
+
+	data := BuildData(p, h.Config.ID)
+	for _, peer := range h.getPeers() {
+		if err := h.WriteToPeer(data, peer); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -522,12 +542,20 @@ func (h *Homebrew) handleAuth(peer *Peer) error {
 }
 
 func (h *Homebrew) handlePacket(p *dmr.Packet, peer *Peer) error {
+	h.rxtx.Lock()
+	defer h.rxtx.Unlock()
+
+	// Record last received time
+	h.last = time.Now()
+
+	// Offload packet to handle callback
 	if peer.PacketReceived != nil {
 		return peer.PacketReceived(h, p)
 	}
 	if h.pf == nil {
 		return errors.New("homebrew: no PacketReceived func defined to handle DMR packet")
 	}
+
 	return h.pf(h, p)
 }
 
@@ -666,6 +694,44 @@ func packRepeaterID(id uint32) []byte {
 	return []byte(fmt.Sprintf("%08X", id))
 }
 
+// BuildData converts DMR packet format to Homebrew packet format.
+func BuildData(p *dmr.Packet, repeaterID uint32) []byte {
+	var data = make([]byte, 53)
+	copy(data[:4], DMRData)
+	data[4] = p.Sequence
+	data[5] = uint8(p.SrcID >> 16)
+	data[6] = uint8(p.SrcID >> 8)
+	data[7] = uint8(p.SrcID)
+	data[8] = uint8(p.DstID >> 16)
+	data[9] = uint8(p.DstID >> 8)
+	data[10] = uint8(p.DstID)
+	data[11] = uint8(repeaterID >> 24)
+	data[12] = uint8(repeaterID >> 16)
+	data[13] = uint8(repeaterID >> 8)
+	data[14] = uint8(repeaterID)
+	data[15] = p.Timeslot | (p.CallType << 1)
+	data[16] = uint8(p.StreamID >> 24)
+	data[17] = uint8(p.StreamID >> 16)
+	data[18] = uint8(p.StreamID >> 8)
+	data[19] = uint8(p.StreamID)
+	copy(data[20:], p.Data)
+
+	switch p.DataType {
+	case dmr.VoiceBurstB, dmr.VoiceBurstC, dmr.VoiceBurstD, dmr.VoiceBurstE, dmr.VoiceBurstF:
+		data[15] |= (0x00 << 2)
+		data[15] |= (p.DataType - dmr.VoiceBurstA) << 4
+		break
+	case dmr.VoiceBurstA:
+		data[15] |= (0x01 << 2)
+		break
+	default:
+		data[15] |= (0x02 << 2)
+		data[15] |= (p.DataType) << 4
+	}
+
+	return data
+}
+
 // ParseData converts Homebrew packet format to DMR packet format.
 func ParseData(data []byte) (*dmr.Packet, error) {
 	if len(data) != 53 {
@@ -686,8 +752,12 @@ func ParseData(data []byte) (*dmr.Packet, error) {
 	switch (data[15] >> 2) & 0x03 {
 	case 0x00, 0x01: // voice (B-F), voice sync (A)
 		p.DataType = dmr.VoiceBurstA + (data[15] >> 4)
+		break
 	case 0x02: // data sync
 		p.DataType = (data[15] >> 4)
+		break
+	default: // unknown/unused
+		return nil, errors.New("homebrew: unexpected frame type 0b11")
 	}
 
 	return p, nil

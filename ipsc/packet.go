@@ -44,7 +44,7 @@ var (
 		0x0000: "unknown",
 		0x1111: "voice LC header",
 		0x2222: "terminator with LC",
-		0x3333: "CBSK",
+		0x3333: "CSBK",
 		0x4444: "data header",
 		0x5555: "rate 1/2 data",
 		0x6666: "rate 3/4 data",

@@ -5,7 +5,7 @@ const (
 	PrivacyIndicator              uint8 = iota // Privacy Indicator information in a standalone burst
 	VoiceLC                                    // Indicates the beginning of voice transmission, carries addressing information
 	TerminatorWithLC                           // Indicates the end of transmission, carries LC information
-	CBSK                                       // Carries a control block
+	CSBK                                       // Carries a control block
 	MultiBlockControl                          // Header for multi-block control
 	MultiBlockControlContinuation              // Follow-on blocks for multi-block control
 	Data                                       // Carries addressing and numbering of packet data blocks
@@ -26,12 +26,12 @@ var DataTypeName = map[uint8]string{
 	PrivacyIndicator:              "privacy indicator",
 	VoiceLC:                       "voice LC",
 	TerminatorWithLC:              "terminator with LC",
-	CBSK:                          "control block",
+	CSBK:                          "control block",
 	MultiBlockControl:             "multi-block control",
 	MultiBlockControlContinuation: "multi-block control follow-on",
 	Data:            "data",
-	Rate12Data:      "rate 1/2 packet data",
-	Rate34Data:      "rate 3/4 packet data",
+	Rate12Data:      "rate ½ packet data",
+	Rate34Data:      "rate ¾ packet data",
 	Idle:            "idle",
 	VoiceBurstA:     "voice (burst A)",
 	VoiceBurstB:     "voice (burst B)",
