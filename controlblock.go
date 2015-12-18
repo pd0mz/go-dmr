@@ -23,6 +23,40 @@ type ControlBlock struct {
 	Data         ControlBlockData
 }
 
+func (cb *ControlBlock) Bytes() ([]byte, error) {
+	var data = make([]byte, InfoSize)
+
+	if err := cb.Data.Write(data); err != nil {
+		return nil, err
+	}
+	if cb.Last {
+		data[0] |= B10000000
+	}
+
+	data[4] = uint8(cb.DstID >> 16)
+	data[5] = uint8(cb.DstID >> 8)
+	data[6] = uint8(cb.DstID)
+	data[7] = uint8(cb.SrcID >> 16)
+	data[8] = uint8(cb.SrcID >> 8)
+	data[9] = uint8(cb.SrcID)
+
+	// Calculate CRC16
+	for i := 0; i < 10; i++ {
+		crc16(&cb.CRC, data[i])
+	}
+	crc16end(&cb.CRC)
+
+	// Inverting according to the inversion polynomial.
+	cb.CRC = ^cb.CRC
+	// Applying CRC mask, see DMR AI spec. page 143.
+	cb.CRC ^= 0xa5a5
+
+	data[10] = uint8(cb.CRC >> 8)
+	data[11] = uint8(cb.CRC)
+
+	return data, nil
+}
+
 func (cb *ControlBlock) String() string {
 	if cb.Data == nil {
 		return fmt.Sprintf("CSBK, last %t, %d->%d, unknown (opcode %d)",
@@ -195,40 +229,6 @@ func (d *Preamble) Write(data []byte) error {
 }
 
 var _ (ControlBlockData) = (*Preamble)(nil)
-
-func (cb *ControlBlock) Bytes() ([]byte, error) {
-	var data = make([]byte, InfoSize)
-
-	if err := cb.Data.Write(data); err != nil {
-		return nil, err
-	}
-	if cb.Last {
-		data[0] |= B10000000
-	}
-
-	data[4] = uint8(cb.DstID >> 16)
-	data[5] = uint8(cb.DstID >> 8)
-	data[6] = uint8(cb.DstID)
-	data[7] = uint8(cb.SrcID >> 16)
-	data[8] = uint8(cb.SrcID >> 8)
-	data[9] = uint8(cb.SrcID)
-
-	// Calculate CRC16
-	for i := 0; i < 10; i++ {
-		crc16(&cb.CRC, data[i])
-	}
-	crc16end(&cb.CRC)
-
-	// Inverting according to the inversion polynomial.
-	cb.CRC = ^cb.CRC
-	// Applying CRC mask, see DMR AI spec. page 143.
-	cb.CRC ^= 0xa5a5
-
-	data[10] = uint8(cb.CRC >> 8)
-	data[11] = uint8(cb.CRC)
-
-	return data, nil
-}
 
 func ParseControlBlock(data []byte) (*ControlBlock, error) {
 	if len(data) != InfoSize {

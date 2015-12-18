@@ -35,10 +35,7 @@ func ParseDataBlock(data []byte, dataType uint8, confirmed bool) (*DataBlock, er
 		db.Serial = data[0] >> 1
 		db.CRC = uint16(data[0]&B00000001)<<8 | uint16(data[1])
 		db.Data = make([]byte, db.Length)
-		copy(db.Data, data[2:db.Length])
-
-		//log.Debugf("data block serial: %#02x (%#07b), crc: %#02x (%#09b), length: %d, confirmed: %t:", db.Serial, db.Serial, db.CRC, db.CRC, db.Length, confirmed)
-		//log.Debug(hex.Dump(data[2 : 2+db.Length]))
+		copy(db.Data, data[2:2+db.Length])
 
 		for _, block := range db.Data {
 			crc9(&crc, block, 8)
@@ -56,7 +53,6 @@ func ParseDataBlock(data []byte, dataType uint8, confirmed bool) (*DataBlock, er
 		if crc != db.CRC {
 			return nil, fmt.Errorf("dmr: block CRC error (%#04x != %#04x)", crc, db.CRC)
 		}
-		log.Debugf("dmr: data block CRC passed %#04x", crc)
 	} else {
 		copy(db.Data, data[:db.Length])
 	}
@@ -239,8 +235,6 @@ func CombineDataBlocks(blocks []*DataBlock) (*DataFragment, error) {
 	if crc != f.CRC {
 		return nil, fmt.Errorf("dmr: fragment CRC error (%#08x != %#08x)", crc, f.CRC)
 	}
-	log.Debugf("dmr: data fragment CRC passed %#08x", crc)
-
 	return f, nil
 }
 
@@ -279,33 +273,6 @@ func ParseMessageData(data []byte, ddFormat uint8, nullTerminated bool) (string,
 }
 
 func init() {
-	/*
-		DDFormatBinary:         "binary",
-		DDFormatBCD:            "BCD",
-		DDFormat7BitChar:       "7-bit characters",
-		DDFormat8BitISO8859_1:  "8-bit ISO 8859-1",
-		DDFormat8BitISO8859_2:  "8-bit ISO 8859-2",
-		DDFormat8BitISO8859_3:  "8-bit ISO 8859-3",
-		DDFormat8BitISO8859_4:  "8-bit ISO 8859-4",
-		DDFormat8BitISO8859_5:  "8-bit ISO 8859-5",
-		DDFormat8BitISO8859_6:  "8-bit ISO 8859-6",
-		DDFormat8BitISO8859_7:  "8-bit ISO 8859-7",
-		DDFormat8BitISO8859_8:  "8-bit ISO 8859-8",
-		DDFormat8BitISO8859_9:  "8-bit ISO 8859-9",
-		DDFormat8BitISO8859_10: "8-bit ISO 8859-10",
-		DDFormat8BitISO8859_11: "8-bit ISO 8859-11",
-		DDFormat8BitISO8859_13: "8-bit ISO 8859-13",
-		DDFormat8BitISO8859_14: "8-bit ISO 8859-14",
-		DDFormat8BitISO8859_15: "8-bit ISO 8859-15",
-		DDFormat8BitISO8859_16: "8-bit ISO 8859-16",
-		DDFormatUTF8:           "UTF-8",
-		DDFormatUTF16:          "UTF-16",
-		DDFormatUTF16BE:        "UTF-16 big endian",
-		DDFormatUTF16LE:        "UTF-16 little endian",
-		DDFormatUTF32:          "UTF-32",
-		DDFormatUTF32BE:        "UTF-32 big endian",
-		DDFormatUTF32LE:        "UTF-32 little endian",
-	*/
 	encodingMap = map[uint8]encoding.Encoding{
 		DDFormatBinary:         binaryEncoding{},
 		DDFormat8BitISO8859_2:  charmap.ISO8859_2,

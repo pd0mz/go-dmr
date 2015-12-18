@@ -1,6 +1,9 @@
 package dmr
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Data Header Packet Format
 const (
@@ -37,17 +40,35 @@ const (
 	ServiceAccessPointShortData                           // 0b1010
 )
 
-// Response Data Header Response Type
+var ServiceAccessPointName = map[uint8]string{
+	ServiceAccessPointUDT:                    "UDT",
+	ServiceAccessPointTCPIPHeaderCompression: "TCP/IP header compression",
+	ServiceAccessPointUDPIPHeaderCompression: "UDP/IP header compression",
+	ServiceAccessPointIPBasedPacketData:      "IP based packet data",
+	ServiceAccessPointARP:                    "ARP",
+	ServiceAccessPointProprietaryData:        "proprietary data",
+	ServiceAccessPointShortData:              "short data",
+}
+
+// Response Data Header Response Type, encodes class and type
 const (
-	ResponseTypeACK uint8 = iota
-	ResponseTypeIllegalFormat
-	ResponseTypePacketCRCFailed
-	ResponseTypeMemoryFull
-	ResponseTypeRecvFSVNOutOfSeq
-	ResponseTypeUndeliverable
-	ResponseTypeRecvPktOutOfSeq
-	ResponseTypeDisallowed
-	ResponseTypeSelectiveACK
+	_                            uint8 = iota // Class 0b00, Type 0b000
+	ResponseTypeACK                           // Class 0b00, Type 0b001
+	_                                         // Class 0b00, Type 0b010
+	_                                         // Class 0b00, Type 0b011
+	_                                         // Class 0b00, Type 0b100
+	_                                         // Class 0b00, Type 0b101
+	_                                         // Class 0b00, Type 0b110
+	_                                         // Class 0b00, Type 0b111
+	ResponseTypeIllegalFormat                 // Class 0b01, Type 0b000
+	ResponseTypePacketCRCFailed               // Class 0b01, Type 0b001
+	ResponseTypeMemoryFull                    // Class 0b01, Type 0b010
+	ResponseTypeRecvFSVNOutOfSeq              // Class 0b01, Type 0b011
+	ResponseTypeUndeliverable                 // Class 0b01, Type 0b100
+	ResponseTypeRecvPktOutOfSeq               // Class 0b01, Type 0b101
+	ResponseTypeDisallowed                    // Class 0b01, Type 0b110
+	_                                         // Class 0b01, Type 0b111
+	ResponseTypeSelectiveACK                  // Class 0b10, Type 0b000
 )
 
 var ResponseTypeName = map[uint8]string{
@@ -188,6 +209,66 @@ type DataHeader struct {
 	Data               DataHeaderData
 }
 
+func (h *DataHeader) Bytes() ([]byte, error) {
+	var data = make([]byte, 12)
+
+	data[0] = (h.PacketFormat & B00001111)
+	if h.DstIsGroup {
+		data[0] |= B10000000
+	}
+	if h.ResponseRequested {
+		data[0] |= B01000000
+	}
+	if h.HeaderCompression {
+		data[0] |= B00100000
+	}
+	data[1] = (h.ServiceAccessPoint & B00001111)
+	data[2] = uint8(h.DstID >> 16)
+	data[3] = uint8(h.DstID >> 8)
+	data[4] = uint8(h.DstID)
+	data[5] = uint8(h.SrcID >> 16)
+	data[6] = uint8(h.SrcID >> 8)
+	data[7] = uint8(h.SrcID)
+
+	if h.Data != nil {
+		if err := h.Data.Write(data); err != nil {
+			return nil, err
+		}
+	}
+
+	h.CRC = 0
+	for i := 0; i < 10; i++ {
+		crc16(&h.CRC, data[i])
+	}
+	crc16end(&h.CRC)
+
+	// Inverting according to the inversion polynomial.
+	h.CRC = ^h.CRC
+	// Applying CRC mask, see DMR AI spec. page 143.
+	h.CRC ^= 0xcccc
+
+	data[10] = uint8(h.CRC >> 8)
+	data[11] = uint8(h.CRC)
+
+	return data, nil
+}
+
+func (h DataHeader) String() string {
+	var part = []string{"data header"}
+	if h.DstIsGroup {
+		part = append(part, "group")
+	} else {
+		part = append(part, "unit")
+	}
+	part = append(part, fmt.Sprintf("response %t, sap %s (%d), %d->%d",
+		h.ResponseRequested, ServiceAccessPointName[h.ServiceAccessPoint], h.ServiceAccessPoint,
+		h.SrcID, h.DstID))
+	if h.Data != nil {
+		part = append(part, h.Data.String())
+	}
+	return strings.Join(part, ", ")
+}
+
 type UDTData struct {
 	Format            uint8
 	PadNibble         uint8
@@ -264,19 +345,18 @@ func (d ConfirmedData) Write(data []byte) error {
 
 type ResponseData struct {
 	BlocksToFollow uint8
-	Class          uint8
-	Type           uint8
+	ClassType      uint8 // See ResponseType map above
 	Status         uint8
 }
 
 func (d ResponseData) String() string {
-	return fmt.Sprintf("response, blocks %d, class %d, type %s (%d), status %d",
-		d.BlocksToFollow, d.Class, ResponseTypeName[d.Type], d.Type, d.Status)
+	return fmt.Sprintf("response, blocks %d, type %s (%#02b %#03b), status %d",
+		d.BlocksToFollow, ResponseTypeName[d.ClassType], (d.ClassType >> 3), (d.ClassType & 0x07), d.Status)
 }
 
 func (d ResponseData) Write(data []byte) error {
 	data[8] = d.BlocksToFollow & B01111111
-	data[9] = (d.Status&B00000111)<<0 | (d.Type&B00000111)<<3 | (d.Class&B00000011)<<6
+	data[9] = d.Status | d.ClassType<<3
 	return nil
 }
 
@@ -382,7 +462,7 @@ func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
 	} else {
 		switch h.PacketFormat {
 		case PacketFormatUDT:
-			h.Data = UDTData{
+			h.Data = &UDTData{
 				Format:            (data[1] & B00001111),
 				PadNibble:         (data[8] & B11111000) >> 3,
 				AppendedBlocks:    (data[8] & B00000011),
@@ -392,16 +472,15 @@ func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
 			break
 
 		case PacketFormatResponse:
-			h.Data = ResponseData{
+			h.Data = &ResponseData{
 				BlocksToFollow: (data[8] & B01111111),
-				Class:          (data[9] & B11000000) >> 6,
-				Type:           (data[9] & B00111000) >> 3,
+				ClassType:      (data[9] & B11111000) >> 3,
 				Status:         (data[9] & B00000111),
 			}
 			break
 
 		case PacketFormatUnconfirmedData:
-			h.Data = UnconfirmedData{
+			h.Data = &UnconfirmedData{
 				PadOctetCount:          (data[0] & B00010000) | (data[1] & B00001111),
 				FullMessage:            (data[8] & B10000000) > 0,
 				BlocksToFollow:         (data[8] & B01111111),
@@ -410,7 +489,7 @@ func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
 			break
 
 		case PacketFormatConfirmedData:
-			h.Data = ConfirmedData{
+			h.Data = &ConfirmedData{
 				PadOctetCount:          (data[0] & B00010000) | (data[1] & B00001111),
 				FullMessage:            (data[8] & B10000000) > 0,
 				BlocksToFollow:         (data[8] & B01111111),
@@ -421,7 +500,7 @@ func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
 			break
 
 		case PacketFormatShortDataRaw:
-			h.Data = ShortDataRawData{
+			h.Data = &ShortDataRawData{
 				AppendedBlocks: (data[0] & B00110000) | (data[1] & B00001111),
 				SrcPort:        (data[8] & B11100000) >> 5,
 				DstPort:        (data[8] & B00011100) >> 2,
@@ -432,7 +511,7 @@ func ParseDataHeader(data []byte, proprietary bool) (*DataHeader, error) {
 			break
 
 		case PacketFormatShortDataDefined:
-			h.Data = ShortDataDefinedData{
+			h.Data = &ShortDataDefinedData{
 				AppendedBlocks: (data[0] & B00110000) | (data[1] & B00001111),
 				DDFormat:       (data[8] & B11111100) >> 2,
 				Resync:         (data[8] & B00000010) > 0,
