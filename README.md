@@ -2,6 +2,8 @@
 
 Golang Digital Mobile Radio protocols.
 
+[![Build Status](https://travis-ci.com/pd0mz/go-dmr.svg?token=24oDsRPafHpYb3stEpVa&branch=master)](https://travis-ci.com/pd0mz/go-dmr)
+
 ## References
 
 The DMR Air Interface protocol is specified in *Electromagnetic compatibility
