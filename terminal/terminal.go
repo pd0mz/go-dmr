@@ -178,6 +178,7 @@ func (t *Terminal) dataBlock(p *dmr.Packet, db *dmr.DataBlock) error {
 	}
 
 	slot.data.blocksReceived++
+	t.debugf(p, "data block %d/%d", slot.data.blocksReceived, slot.data.blocksExpected)
 	if slot.data.blocksReceived == slot.data.blocksExpected {
 		return t.dataBlockAssemble(p)
 	}
@@ -248,20 +249,18 @@ func (t *Terminal) dataBlockComplete(p *dmr.Packet, f *dmr.DataFragment) error {
 	)
 
 	switch slot.data.header.ServiceAccessPoint {
-	case dmr.ServiceAccessPointIPBasedPacketData:
-		t.debugf(p, "SAP IP based packet data (not implemented)")
-		break
-
 	case dmr.ServiceAccessPointShortData:
-		t.debugf(p, "SAP short data")
-
 		data = f.Data[2:]       // Hytera has a 2 byte pre-padding
 		size = f.Stored - 2 - 4 // Leave out the CRC
 
 		if sdd, ok := slot.data.header.Data.(*dmr.ShortDataDefinedData); ok {
 			ddformat = sdd.DDFormat
 		}
+		t.debugf(p, "bytes %d, format %s (%d)", size, dmr.DDFormatName[ddformat], ddformat)
 		break
+
+	default:
+		t.warningf(p, "service accesspoint not implemented")
 	}
 
 	if data == nil || size == 0 {
@@ -354,14 +353,17 @@ func (t *Terminal) voiceCallStart(p *dmr.Packet) error {
 
 func (t *Terminal) handlePacket(r dmr.Repeater, p *dmr.Packet) error {
 	// Ignore packets not addressed to us or any of the talk groups we monitor
-	if !t.accept[p.DstID] {
+	if false && !t.accept[p.DstID] {
 		//log.Debugf("[%d->%d] (%s, %#04b): ignored, not sent to me", p.SrcID, p.DstID, dmr.DataTypeName[p.DataType], p.DataType)
 		return nil
 	}
 
 	var err error
 
-	t.debugf(p, dmr.DataTypeName[p.DataType])
+	t.warningf(p, "handle packet: %s", dmr.DataTypeName[p.DataType])
+	log.Debug(hex.Dump(p.Data))
+
+	//
 	switch p.DataType {
 	case dmr.CSBK:
 		err = t.handleControlBlock(p)
@@ -381,6 +383,7 @@ func (t *Terminal) handlePacket(r dmr.Repeater, p *dmr.Packet) error {
 		err = t.handleTerminatorWithLC(p)
 		return nil
 	default:
+		t.warningf(p, "unhandled packet: %s", dmr.DataTypeName[p.DataType])
 		log.Debug(hex.Dump(p.Data))
 		return nil
 	}
@@ -447,9 +450,9 @@ func (t *Terminal) handleData(p *dmr.Packet) error {
 	slot.selectiveAckRequestsSent = 0
 	slot.rxSequence = 0
 
-	t.debugf(p, "data header: %T", h)
+	t.debugf(p, h.String())
 	switch d := h.Data.(type) {
-	case dmr.ShortDataDefinedData:
+	case *dmr.ShortDataDefinedData:
 		if d.FullMessage {
 			slot.fullMessageBlocks = int(d.AppendedBlocks)
 			slot.data.blocks = make([]*dmr.DataBlock, slot.fullMessageBlocks)
@@ -460,7 +463,7 @@ func (t *Terminal) handleData(p *dmr.Packet) error {
 		break
 
 	default:
-		t.warningf(p, "unhandled data header %T", h)
+		t.warningf(p, "unhandled data header %T", h.Data)
 		return nil
 	}
 
