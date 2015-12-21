@@ -4,7 +4,6 @@ package homebrew
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -66,41 +65,6 @@ var (
 	SendInterval = time.Millisecond * 30
 )
 
-// Peer is a remote repeater that also speaks the Homebrew protocol
-type Peer struct {
-	ID                  uint32
-	Addr                *net.UDPAddr
-	AuthKey             []byte
-	Status              AuthStatus
-	Nonce               []byte
-	Token               []byte
-	Incoming            bool
-	UnlinkOnAuthFailure bool
-	PacketReceived      dmr.PacketFunc
-	Last                struct {
-		PacketSent     time.Time
-		PacketReceived time.Time
-		PingSent       time.Time
-		PingReceived   time.Time
-		PongReceived   time.Time
-	}
-
-	// Packed repeater ID
-	id []byte
-}
-
-func (p *Peer) CheckRepeaterID(id []byte) bool {
-	return id != nil && p.id != nil && bytes.Equal(id, p.id)
-}
-
-func (p *Peer) UpdateToken(nonce []byte) {
-	p.Nonce = nonce
-	hash := sha256.New()
-	hash.Write(p.Nonce)
-	hash.Write(p.AuthKey)
-	p.Token = []byte(hex.EncodeToString(hash.Sum(nil)))
-}
-
 // Homebrew is implements the Homebrew IPSC DMR Air Interface protocol
 type Homebrew struct {
 	Config *RepeaterConfiguration
@@ -135,6 +99,7 @@ func New(config *RepeaterConfiguration, addr *net.UDPAddr) (*Homebrew, error) {
 		PeerID: make(map[uint32]*Peer),
 		id:     packRepeaterID(config.ID),
 		mutex:  &sync.Mutex{},
+		rxtx:   &sync.Mutex{},
 		queue:  make([]*dmr.Packet, 0),
 	}
 	if h.conn, err = net.ListenUDP("udp", addr); err != nil {
