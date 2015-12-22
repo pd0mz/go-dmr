@@ -49,6 +49,11 @@ const (
 	CallTypeGroup
 )
 
+var CallTypeName = map[uint8]string{
+	CallTypePrivate: "private",
+	CallTypeGroup:   "group",
+}
+
 // Packet represents a frame transported by the Air Interface
 type Packet struct {
 	// 0 for slot 1, 1 for slot 2

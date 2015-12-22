@@ -11,6 +11,7 @@ import (
 	"github.com/pd0mz/go-dmr"
 	"github.com/pd0mz/go-dmr/bptc"
 	"github.com/pd0mz/go-dmr/trellis"
+	"github.com/pd0mz/go-dmr/vbptc"
 )
 
 var log = logging.MustGetLogger("dmr/terminal")
@@ -44,13 +45,21 @@ type Slot struct {
 	selectiveAckRequestsSent int
 	rxSequence               int
 	fullMessageBlocks        int
+	embeddedSignalling       *vbptc.VBPTC
 	last                     struct {
 		packetReceived time.Time
 	}
 }
 
 func NewSlot() *Slot {
-	return &Slot{}
+	s := &Slot{}
+
+	// Expecting 8 rows of variable length BPTC coded embedded LC data.
+	// It will contain 77 data bits (without the Hamming (16,11) checksums
+	// and the last row of parity bits).
+	s.embeddedSignalling = vbptc.New(8)
+
+	return s
 }
 
 type VoiceFrameFunc func(*dmr.Packet, []byte)
@@ -378,7 +387,8 @@ func (t *Terminal) handlePacket(r dmr.Repeater, p *dmr.Packet) error {
 		err = t.handleVoice(p)
 		break
 	case dmr.VoiceLC:
-		return nil
+		err = t.handleVoiceLC(p)
+		break
 	case dmr.TerminatorWithLC:
 		err = t.handleTerminatorWithLC(p)
 		return nil
@@ -506,16 +516,36 @@ func (t *Terminal) handleRate34Data(p *dmr.Packet) error {
 
 func (t *Terminal) handleTerminatorWithLC(p *dmr.Packet) error {
 	// This ends both data and voice calls
-	return t.callEnd(p)
+	if err := t.callEnd(p); err != nil {
+		return err
+	}
+
+	var (
+		bits = p.InfoBits()
+		data = make([]byte, 12)
+	)
+	if err := bptc.Decode(bits, data); err != nil {
+		return err
+	}
+
+	// Applying CRC mask to the checksum. See DMR AI. spec. page 143.
+	data[9] ^= 0x99
+	data[10] ^= 0x99
+	data[11] ^= 0x99
+
+	lc, err := dmr.ParseFullLC(data)
+	if err != nil {
+		return err
+	}
+
+	t.debugf(p, "lc: %s", lc.String())
+
+	return nil
 }
 
 func (t *Terminal) handleVoice(p *dmr.Packet) error {
 	slot := t.slot[p.Timeslot]
 	slot.last.packetReceived = time.Now()
-
-	var (
-		bits = p.VoiceBits()
-	)
 
 	switch t.state {
 	case voiceCallActive:
@@ -529,8 +559,69 @@ func (t *Terminal) handleVoice(p *dmr.Packet) error {
 		break
 	}
 
+	// Check sync frame
+	sync := p.SyncBits()
+	patt := dmr.SyncPattern(sync)
+	if patt != dmr.SyncPatternUnknown {
+		t.debugf(p, "sync pattern %s", dmr.SyncPatternName[patt])
+	} else {
+		// Not a sync frame, sync field should contain EMB
+		bits, err := dmr.ParseEMBBitsFromSync(sync)
+		if err != nil {
+			return err
+		}
+		emb, err := dmr.ParseEMB(bits)
+		if err != nil {
+			return err
+		}
+		t.debugf(p, "embedded signalling %s", emb.String())
+
+		// Handling embedded signalling LC
+		switch emb.LCSS {
+		case dmr.SingleFragment:
+			return nil // FIXME(pd0mz): unhandled
+		case dmr.FirstFragment:
+			slot.embeddedSignalling.Clear()
+			break
+		}
+
+		if emb.LCSS == dmr.FirstFragment || emb.LCSS == dmr.Continuation || emb.LCSS == dmr.LastFragment {
+			frag, err := dmr.ParseEmbeddedSignallingLCFromSyncBits(sync)
+			if err != nil {
+				return err
+			}
+			if err := slot.embeddedSignalling.AddBurst(frag); err != nil {
+				return err
+			}
+		}
+
+		if emb.LCSS == dmr.LastFragment {
+			if err := slot.embeddedSignalling.CheckAndRepair(); err != nil {
+				return err
+			}
+
+			var signalling = make([]byte, 77)
+			if err := slot.embeddedSignalling.GetData(signalling); err != nil {
+				return err
+			}
+			eslc, err := dmr.DeinterleaveEmbeddedSignallingLC(signalling)
+			if err != nil {
+				return err
+			}
+			if !eslc.Check() {
+				return errors.New("embedded signalling LC checksum failed")
+			}
+
+			lc, err := dmr.ParseLC(dmr.BitsToBytes(eslc.Bits))
+			if err != nil {
+				return err
+			}
+			t.debugf(p, "lc: %s", lc.String())
+		}
+	}
+
 	if t.vff != nil {
-		t.vff(p, bits)
+		t.vff(p, p.VoiceBits())
 		if t.SoftwareDelay {
 			delta := time.Now().Sub(slot.last.packetReceived)
 			if delta < VoiceFrameDuration {
@@ -540,6 +631,30 @@ func (t *Terminal) handleVoice(p *dmr.Packet) error {
 			}
 		}
 	}
+
+	return nil
+}
+
+func (t *Terminal) handleVoiceLC(p *dmr.Packet) error {
+	var (
+		bits = p.InfoBits()
+		data = make([]byte, 12)
+	)
+	if err := bptc.Decode(bits, data); err != nil {
+		return err
+	}
+
+	// Applying CRC mask to the checksum. See DMR AI. spec. page 143.
+	data[9] ^= 0x96
+	data[10] ^= 0x96
+	data[11] ^= 0x96
+
+	lc, err := dmr.ParseFullLC(data)
+	if err != nil {
+		return err
+	}
+
+	t.debugf(p, "lc: %s", lc.String())
 
 	return nil
 }

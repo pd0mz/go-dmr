@@ -76,7 +76,8 @@ func Decode(info, data []byte) error {
 
 	// Hamming checks
 	if err := hamming_check(bits); err != nil {
-		return err
+		//return err
+		//log.Warningf("hamming check failed: %v", err)
 	}
 
 	// Extract data bits
