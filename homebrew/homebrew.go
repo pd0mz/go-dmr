@@ -552,6 +552,7 @@ func (h *Homebrew) keepalive(stop <-chan bool) {
 					case AuthNone, AuthBegin:
 						switch {
 						case now.Sub(peer.Last.PacketReceived) > AuthTimeout:
+							peer.Status = AuthNone
 							log.Errorf("peer %d@%s not responding to login; retrying\n", peer.ID, peer.Addr)
 							if err := h.handleAuth(peer); err != nil {
 								log.Errorf("peer %d@%s retry failed: %v\n", peer.ID, peer.Addr, err)
