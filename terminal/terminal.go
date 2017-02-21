@@ -10,6 +10,7 @@ import (
 	"github.com/op/go-logging"
 	"github.com/pd0mz/go-dmr"
 	"github.com/pd0mz/go-dmr/bptc"
+	"github.com/pd0mz/go-dmr/lc"
 	"github.com/pd0mz/go-dmr/trellis"
 	"github.com/pd0mz/go-dmr/vbptc"
 )
@@ -370,7 +371,7 @@ func (t *Terminal) handlePacket(r dmr.Repeater, p *dmr.Packet) error {
 	var err error
 
 	t.warningf(p, "handle packet: %s", dmr.DataTypeName[p.DataType])
-	log.Debug(hex.Dump(p.Data))
+	//log.Debug(hex.Dump(p.Data))
 
 	//
 	switch p.DataType {
@@ -533,12 +534,12 @@ func (t *Terminal) handleTerminatorWithLC(p *dmr.Packet) error {
 	data[10] ^= 0x99
 	data[11] ^= 0x99
 
-	lc, err := dmr.ParseFullLC(data)
+	lc, err := lc.ParseFullLC(data)
 	if err != nil {
 		return err
 	}
 
-	t.debugf(p, "lc: %s", lc.String())
+	t.debugf(p, "terminator with lc: %s", lc.String())
 
 	return nil
 }
@@ -612,11 +613,11 @@ func (t *Terminal) handleVoice(p *dmr.Packet) error {
 				return errors.New("embedded signalling LC checksum failed")
 			}
 
-			lc, err := dmr.ParseLC(dmr.BitsToBytes(eslc.Bits))
+			lc, err := lc.ParseLC(dmr.BitsToBytes(eslc.Bits))
 			if err != nil {
 				return err
 			}
-			t.debugf(p, "lc: %s", lc.String())
+			t.debugf(p, "voice embedded lc: %s", lc.String())
 		}
 	}
 
@@ -649,12 +650,12 @@ func (t *Terminal) handleVoiceLC(p *dmr.Packet) error {
 	data[10] ^= 0x96
 	data[11] ^= 0x96
 
-	lc, err := dmr.ParseFullLC(data)
+	lc, err := lc.ParseFullLC(data)
 	if err != nil {
 		return err
 	}
 
-	t.debugf(p, "lc: %s", lc.String())
+	t.debugf(p, "voice header lc: %s", lc.String())
 
 	return nil
 }
