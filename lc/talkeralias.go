@@ -35,18 +35,39 @@ type TalkerAliasBlockPDU struct {
 	Data []byte
 }
 
+func movebit(src []byte, srcByte int, srcBit int, dst []byte, dstByte int, dstBit int) {
+	bit := (src[srcByte] >> uint8(srcBit)) & dmr.B00000001
+	if bit >= 1 {
+		dst[dstByte] |= 1 << uint8(dstBit)
+	} else {
+		dst[dstByte] &= 0 << uint8(dstBit)
+	}
+}
+
 // ParseTalkerAliasHeaderPDU parses TalkerAliasHeader PDU from bytes
 func ParseTalkerAliasHeaderPDU(data []byte) (*TalkerAliasHeaderPDU, error) {
 	if len(data) != 7 {
 		return nil, fmt.Errorf("dmr/lc/talkeralias: expected 7 bytes, got %d", len(data))
 	}
 
-	// TODO parse bit 49
+	dataFormat := (data[0] & dmr.B11000000) >> 6
+
+	var out []byte
+	if dataFormat == Format7Bit {
+		// it will reorganize the bits in the array and return []byte with 7bit chars
+		// in each position
+		out = make([]byte, 7)
+		for i := 7; i < 56; i++ {
+			movebit(data, i/8, (7 - (i % 8)), out, (i-7)/7, 6-(i%7))
+		}
+	} else {
+		out = data[1:6]
+	}
 
 	return &TalkerAliasHeaderPDU{
-		DataFormat: (data[0] & dmr.B11000000) >> 6,
+		DataFormat: dataFormat,
 		Length:     (data[0] & dmr.B00111110) >> 1,
-		Data:       data[1:6],
+		Data:       out,
 	}, nil
 }
 
