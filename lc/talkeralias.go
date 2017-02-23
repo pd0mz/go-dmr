@@ -73,20 +73,39 @@ func ParseTalkerAliasHeaderPDU(data []byte) (*TalkerAliasHeaderPDU, error) {
 
 // Bytes returns object as bytes
 func (t *TalkerAliasHeaderPDU) Bytes() []byte {
-	return []byte{
-		((t.DataFormat << 6) & dmr.B11000000) | ((t.Length << 1) & dmr.B00111110), // TODO bit 49
-		t.Data[0],
-		t.Data[1],
-		t.Data[2],
-		t.Data[3],
-		t.Data[4],
-		t.Data[5],
+	var (
+		out   []byte
+		bit49 byte
+	)
+
+	if t.DataFormat == Format7Bit {
+		out = make([]byte, 6)
+		for i := 7; i < 56; i++ {
+			movebit(t.Data, (i-7)/7, 6-(i%7), out, (i/8)-1, (7 - (i % 8)))
+		}
+	} else {
+		out = t.Data
 	}
+
+	return []byte{
+		((t.DataFormat << 6) & dmr.B11000000) | ((t.Length << 1) & dmr.B00111110) | (bit49 & dmr.B00000001),
+		out[0],
+		out[1],
+		out[2],
+		out[3],
+		out[4],
+		out[5],
+	}
+}
+
+// DataAsString Returns data part of PDU encoded as string
+func (t *TalkerAliasHeaderPDU) DataAsString() string {
+	return string(t.Data)
 }
 
 func (t *TalkerAliasHeaderPDU) String() string {
 	return fmt.Sprintf("TalkerAliasHeader: [ format: %s, length: %d, data: \"%s\" ]",
-		DataFormatName[t.DataFormat], t.Length, string(t.Data))
+		DataFormatName[t.DataFormat], t.Length, t.DataAsString())
 }
 
 // ParseTalkerAliasBlockPDU parse talker alias block pdu
@@ -105,6 +124,11 @@ func (t *TalkerAliasBlockPDU) Bytes() []byte {
 	return t.Data
 }
 
+// DataAsString Returns data part of PDU encoded as string
+func (t *TalkerAliasBlockPDU) DataAsString() string {
+	return string(t.Data)
+}
+
 func (t *TalkerAliasBlockPDU) String() string {
-	return fmt.Sprintf("TalkerAliasBlock: [ data: \"%s\" ]", string(t.Data))
+	return fmt.Sprintf("TalkerAliasBlock: [ data: \"%s\" ]", t.DataAsString())
 }
