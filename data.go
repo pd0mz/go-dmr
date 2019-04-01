@@ -54,6 +54,7 @@ func ParseDataBlock(data []byte, dataType uint8, confirmed bool) (*DataBlock, er
 			return nil, fmt.Errorf("dmr: block CRC error (%#04x != %#04x)", crc, db.CRC)
 		}
 	} else {
+		db.Data = make([]byte, db.Length)
 		copy(db.Data, data[:db.Length])
 	}
 
