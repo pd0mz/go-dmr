@@ -164,7 +164,7 @@ func (df *DataFragment) DataBlocks(dataType uint8, confirm bool) ([]*DataBlock, 
 
 		store := int(block.Length)
 		if df.Stored-stored < store {
-			store = df.Stored - store
+			store = df.Stored - stored
 		}
 		copy(block.Data, df.Data[stored:stored+store])
 		stored += store
