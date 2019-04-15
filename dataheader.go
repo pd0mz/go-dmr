@@ -350,7 +350,7 @@ type ResponseData struct {
 }
 
 func (d ResponseData) String() string {
-	return fmt.Sprintf("response, blocks %d, type %s (%#02b %#03b), status %d",
+	return fmt.Sprintf("response, blocks %d, type %s (%02b %03b), status %d",
 		d.BlocksToFollow, ResponseTypeName[d.ClassType], (d.ClassType >> 3), (d.ClassType & 0x07), d.Status)
 }
 
