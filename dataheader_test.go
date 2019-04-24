@@ -211,7 +211,7 @@ func TestDataHeaderShortDataDefined(t *testing.T) {
 		t.Fatalf("decode failed: appended blocks wrong")
 
 	case d.DDFormat != DDFormatUTF16:
-		t.Fatalf("decode failed: dd format wrong, expected UTF-16, got %d", DDFormatName[d.DDFormat])
+		t.Fatalf("decode failed: dd format wrong, expected UTF-16, got %s", DDFormatName[d.DDFormat])
 
 	case d.Resync:
 		t.Fatalf("decode failed: rsync bit wrong")

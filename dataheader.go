@@ -222,7 +222,7 @@ func (h *DataHeader) Bytes() ([]byte, error) {
 	if h.HeaderCompression {
 		data[0] |= B00100000
 	}
-	data[1] = (h.ServiceAccessPoint & B00001111)
+	data[1] = (h.ServiceAccessPoint << 4) & B11110000
 	data[2] = uint8(h.DstID >> 16)
 	data[3] = uint8(h.DstID >> 8)
 	data[4] = uint8(h.DstID)
@@ -350,7 +350,7 @@ type ResponseData struct {
 }
 
 func (d ResponseData) String() string {
-	return fmt.Sprintf("response, blocks %d, type %s (%#02b %#03b), status %d",
+	return fmt.Sprintf("response, blocks %d, type %s (%02b %03b), status %d",
 		d.BlocksToFollow, ResponseTypeName[d.ClassType], (d.ClassType >> 3), (d.ClassType & 0x07), d.Status)
 }
 

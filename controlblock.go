@@ -284,7 +284,7 @@ func ParseControlBlock(data []byte) (*ControlBlock, error) {
 		cb.Data = &Preamble{}
 		break
 	default:
-		return nil, fmt.Errorf("dmr: unknown CSBK opcode %#02x (%#06b)", cb.Opcode, cb.Opcode)
+		return nil, fmt.Errorf("dmr: unknown CSBK opcode %02x (%06b)", cb.Opcode, cb.Opcode)
 	}
 
 	if err := cb.Data.Parse(data); err != nil {

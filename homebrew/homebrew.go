@@ -254,7 +254,8 @@ func (h *Homebrew) WriteToPeerWithID(b []byte, id uint32) error {
 }
 
 func (h *Homebrew) checkRepeaterID(id []byte) bool {
-	return id != nil && bytes.Equal(id, h.id)
+	// BrandMeister release 20190421-185653 switched from upper case to lower case hex digits
+	return id != nil && bytes.EqualFold(id, h.id)
 }
 
 func (h *Homebrew) getPeer(id uint32) *Peer {

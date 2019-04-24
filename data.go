@@ -54,6 +54,7 @@ func ParseDataBlock(data []byte, dataType uint8, confirmed bool) (*DataBlock, er
 			return nil, fmt.Errorf("dmr: block CRC error (%#04x != %#04x)", crc, db.CRC)
 		}
 	} else {
+		db.Data = make([]byte, db.Length)
 		copy(db.Data, data[:db.Length])
 	}
 
@@ -163,7 +164,7 @@ func (df *DataFragment) DataBlocks(dataType uint8, confirm bool) ([]*DataBlock, 
 
 		store := int(block.Length)
 		if df.Stored-stored < store {
-			store = df.Stored - store
+			store = df.Stored - stored
 		}
 		copy(block.Data, df.Data[stored:stored+store])
 		stored += store
