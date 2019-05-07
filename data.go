@@ -81,6 +81,9 @@ func (db *DataBlock) Bytes(dataType uint8, confirmed bool) []byte {
 		// Applying CRC mask, see DMR AI spec. page 143
 		db.CRC ^= 0x01ff
 
+		// Grow data slice to support the two byte prefix
+		data = append(data, make([]byte, 2)...)
+
 		data[0] = (db.Serial << 1) | (uint8(db.CRC>>8) & 0x01)
 		data[1] = uint8(db.CRC)
 		copy(data[2:], db.Data)

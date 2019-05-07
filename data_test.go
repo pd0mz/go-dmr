@@ -19,7 +19,8 @@ func TestDataBlock(t *testing.T) {
 	if data == nil {
 		t.Fatal("encode failed")
 	}
-	size := int(dataBlockLength(Rate34Data, true))
+	// Size is the user-data + two octets of serial/crc
+	size := int(dataBlockLength(Rate34Data, true)) + 2
 	if len(data) != size {
 		t.Fatalf("encode failed: expected %d bytes, got %d", size, len(data))
 	}
