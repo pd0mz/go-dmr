@@ -15,6 +15,30 @@ const (
 	MaxPacketFragmentSize = 1500
 )
 
+// CRC Masks for data block's CRC-9 calculation, see DMR AI spec. page 148 (Table B.21).
+var crc9Masks = map[uint8]uint16{
+	Rate12Data: 0x00f0,
+	Rate34Data: 0x01ff,
+	//Rate1Data: 0x010f,
+}
+
+func calculateCRC9(serial uint8, data []byte, dataType uint8) (crc uint16) {
+	for _, block := range data {
+		crc9(&crc, block, 8)
+	}
+	crc9(&crc, serial, 7)
+	crc9end(&crc, 8)
+
+	// Inverting according to the inversion polynomial.
+	crc = ^crc
+	crc &= 0x01ff
+
+	// Applying Data Type CRC Mask
+	crc ^= crc9Masks[dataType]
+
+	return crc
+}
+
 type DataBlock struct {
 	Serial uint8
 	CRC    uint16
@@ -37,17 +61,7 @@ func ParseDataBlock(data []byte, dataType uint8, confirmed bool) (*DataBlock, er
 		db.Data = make([]byte, db.Length)
 		copy(db.Data, data[2:2+db.Length])
 
-		for _, block := range db.Data {
-			crc9(&crc, block, 8)
-		}
-		crc9(&crc, db.Serial, 7)
-		crc9end(&crc, 8)
-
-		// Inverting according to the inversion polynomial.
-		crc = ^crc
-		crc &= 0x01ff
-		// Applying CRC mask, see DMR AI spec. page 143
-		crc ^= 0x01ff
+		crc = calculateCRC9(db.Serial, db.Data, dataType)
 
 		// FIXME(pd0mz): this is not working
 		if crc != db.CRC {
@@ -69,17 +83,7 @@ func (db *DataBlock) Bytes(dataType uint8, confirmed bool) []byte {
 	)
 
 	if confirmed {
-		for _, block := range db.Data {
-			crc9(&db.CRC, block, 8)
-		}
-		crc9(&db.CRC, db.Serial, 7)
-		crc9end(&db.CRC, 8)
-
-		// Inverting according to the inversion polynomial.
-		db.CRC = ^db.CRC
-		db.CRC &= 0x01ff
-		// Applying CRC mask, see DMR AI spec. page 143
-		db.CRC ^= 0x01ff
+		db.CRC = calculateCRC9(db.Serial, db.Data, dataType)
 
 		// Grow data slice to support the two byte prefix
 		data = append(data, make([]byte, 2)...)
@@ -180,18 +184,7 @@ func (df *DataFragment) DataBlocks(dataType uint8, confirm bool) ([]*DataBlock, 
 		}
 
 		// Calculate block CRC9
-		block.CRC = 0
-		for _, b := range block.Data {
-			crc9(&block.CRC, b, 8)
-		}
-		crc9(&block.CRC, block.Serial, 7)
-		crc9end(&block.CRC, 8)
-
-		// Inverting according to the inversion polynomial
-		block.CRC = ^block.CRC
-		block.CRC &= 0x01ff
-		// Applying CRC mask, see DMR AI spec. page 143
-		block.CRC ^= 0x01ff
+		block.CRC = calculateCRC9(block.Serial, block.Data, dataType)
 
 		blocks[i] = block
 	}
